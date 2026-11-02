@@ -1,0 +1,12 @@
+{
+  "status": "draft",
+  "approved_by": "",
+  "approval_date": "",
+  "legal_policy_approved": false,
+  "forms_and_crm_verified": false,
+  "cases_and_reviews_confirmed": false,
+  "prices_confirmed": false,
+  "team_and_authors_confirmed": false,
+  "seo_review_approved": false,
+  "migration_redirects_checked": false
+}

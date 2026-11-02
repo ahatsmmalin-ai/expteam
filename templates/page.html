@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% from "parts.html" import breadcrumb,lead %}{% block body %}
+<article class="custom-page">
+  <header class="inner-hero dark-grid article-hero"><div class="container">
+    {{ breadcrumb([{'text': 'Материалы', 'href': '/blog/'}, {'text': page.title}]) }}
+    <p class="eyebrow light">EXPERT TEAM / {{ 'ПУБЛИКАЦИЯ' if page.published else 'СТРАНИЦА ДЛЯ СОГЛАСОВАНИЯ' }}</p>
+    <h1>{{ page.h1 }}</h1>
+    <p class="inner-lead">{{ page.intro }}</p>
+  </div></header>
+  <div class="container article-layout">
+    <aside class="article-side"><span class="eyebrow">СОДЕРЖАНИЕ</span>
+      <div class="article-toc">{% for h in page.headings %}<a href="#{{ h.id }}">{{ h.title }}</a>{% endfor %}</div>
+      {% if not page.published %}<span class="draft-label">Черновик: не предназначен для индексации.</span>{% endif %}
+    </aside>
+    <div class="article-content">
+      {% if page.cover_image %}<figure class="editorial-cover"><img src="{{ page.cover_image }}" alt="{{ page.image_alt }}" width="1120" height="630" loading="lazy"></figure>{% endif %}
+      {{ page.html|safe }}
+      {% if page.related %}<div class="article-next"><p>СВЯЗАННЫЕ УСЛУГИ</p><h2>Обсудить вашу задачу</h2><div class="article-links">{% for s in page.related %}<a href="/uslugi/{{ s.slug }}/"><strong>{{ s.name }}</strong><span>↗</span></a>{% endfor %}</div></div>{% endif %}
+    </div>
+  </div>
+</article>
+<div class="container">{{ lead(site) }}</div>
+{% endblock %}

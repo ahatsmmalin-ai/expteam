@@ -1,36 +1,33 @@
-name: ExpertTeam - corporate preflight (no deployment)
+name: ExpertTeam 2026 redesign - staging QA
 on:
-  pull_request:
   push:
     branches: [main]
+  pull_request:
 permissions:
   contents: read
 jobs:
   static-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: 'pip'
-      - name: Dependencies
+          cache: pip
+      - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: CMS data validation
-        run: python scripts/content_integrity.py
-      - name: Staging build - non-indexable
+      - name: Stage build (noindex)
         run: python build.py
-      - name: Links and SEO smoke test
-        run: python scripts/qa_check.py
-      - name: Simulate edit + new page + publication safety
-        run: python scripts/cms_smoke_test.py
-      - name: Refuse production deployment without approvals
+      - name: QA for pages, SEO, graphics and links
+        run: python scripts/redesign_qa.py
+      - name: Simulate CMS content changes
+        run: python scripts/redesign_cms_smoke.py
+      - name: Confirm production release gate
         run: |
           if python build.py --production; then
-            echo 'Unexpected production build without release approval' >&2
+            echo 'Unexpected production build without approval' >&2
             exit 1
           else
-            echo 'Production is correctly blocked until release signoff.'
+            echo 'Production build correctly blocked pending signoff.'
           fi
-      # Intentionally no deployment or repository publishing step.

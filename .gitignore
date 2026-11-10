@@ -1,16 +1,5 @@
-# Generated, local and secret files
-/dist/
-/.venv/
-/venv/
+dist/
 __pycache__/
 *.pyc
 .env
-.env.*
-!.env.example
-*.pem
-*.key
 .DS_Store
-Thumbs.db
-/ExpertTeam_content_cms_preview.html
-/corporate_review_desktop.png
-/corporate_review_mobile.png

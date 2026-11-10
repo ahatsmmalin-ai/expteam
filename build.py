@@ -1,182 +1,151 @@
 #!/usr/bin/env python3
-"""Expert Team: static SEO-first prototype. Run: python build.py [--production]."""
-import json, re, shutil, argparse, os, html, datetime, unicodedata
+"""Expert Team 2026 redesign. Static generation from JSON/Markdown, with a staging release gate."""
+from __future__ import annotations
+import argparse, datetime, html, json, os, re, shutil
 from pathlib import Path
 from urllib.parse import quote
+from xml.sax.saxutils import escape as xml_escape
 import yaml
+from bs4 import BeautifulSoup
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markdown_it import MarkdownIt
-from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
-ROOT=Path(__file__).parent.resolve()
-CONTENT=ROOT/'content'; OUT=ROOT/'dist'
-parser=argparse.ArgumentParser()
-parser.add_argument('--production',action='store_true',help='Enable indexing for approved pages. Draft blog articles remain noindex.')
-args=parser.parse_args()
+
+ROOT=Path(__file__).resolve().parent
+OUT=ROOT/'dist'
+C=ROOT/'content'
+p=argparse.ArgumentParser()
+p.add_argument('--production',action='store_true')
+args=p.parse_args()
 if args.production:
-    import sys
-    sys.path.insert(0, str(ROOT / 'scripts'))
-    from release_readiness import examine
-    failures = examine()
-    if os.environ.get('EXPERTTEAM_GO_LIVE') != 'YES':
-        failures.insert(0, 'Требуется явное EXPERTTEAM_GO_LIVE=YES от ответственного за запуск')
+    approvals=json.loads((C/'release.json').read_text(encoding='utf-8'))
+    required=['legal_policy_approved','forms_and_crm_verified','cases_and_reviews_confirmed','prices_confirmed','team_and_authors_confirmed','seo_review_approved','migration_redirects_checked']
+    if os.environ.get('EXPERTTEAM_GO_LIVE')!='YES' or any(not approvals.get(k) for k in required):
+        p.error('Production release is blocked until all corporate/legal/form/SEO approvals and EXPERTTEAM_GO_LIVE=YES')
     if not os.environ.get('EXPERTTEAM_FORM_ENDPOINT','').startswith('https://'):
-        failures.append('Не указан HTTPS-приёмник заявок EXPERTTEAM_FORM_ENDPOINT')
-    for f in (CONTENT/'cases').glob('*.json'):
-        case = json.loads(f.read_text(encoding='utf-8'))
-        if not case.get('client_approved') or not case.get('evidence'):
-            failures.append(f'Не утверждены данные кейса {case.get("slug", f.name)}')
-    if failures:
-        parser.error('Публикация заблокирована до согласования:\n - '+'\n - '.join(failures))
+        p.error('HTTPS form endpoint missing for production')
 if OUT.exists():shutil.rmtree(OUT)
 OUT.mkdir()
-site=json.loads((CONTENT/'site.json').read_text(encoding='utf-8'))
-services=sorted([json.loads(f.read_text(encoding='utf-8')) for f in (CONTENT/'services').glob('*.json')],key=lambda x:x['code'])
-cases=[json.loads(f.read_text(encoding='utf-8')) for f in (CONTENT/'cases').glob('*.json')]
-case_map={c['slug']:c for c in cases}; service_map={s['slug']:s for s in services}
-cases=sorted(cases,key=lambda x:['mfc-moya-ipoteka','europack','cinemarental'].index(x['slug']) if x['slug'] in ('mfc-moya-ipoteka','europack','cinemarental') else 100)
-faq_home=json.loads((CONTENT/'home_faq.json').read_text(encoding='utf-8'))['items']
-prices=json.loads((CONTENT/'prices.json').read_text(encoding='utf-8'))
-seo_static=json.loads((CONTENT/'seo.json').read_text(encoding='utf-8'))
-seo_guides={p.stem:[[s['title'],s['text']] for s in json.loads(p.read_text(encoding='utf-8'))['sections']] for p in (CONTENT/'guides').glob('*.json')}
-category_names={'marketing':'Маркетинг','lidogeneraciya':'Лидогенерация','reklama':'Реклама','sajty':'Создание сайтов','crm':'CRM и автоматизация','seo':'SEO'}
+site=json.loads((C/'site.json').read_text(encoding='utf-8'))
+data=json.loads((C/'redesign.json').read_text(encoding='utf-8'))
+solution_map={x['slug']:x for x in data['solutions']}
+old_cases={x['slug']:x for x in (json.loads(f.read_text(encoding='utf-8')) for f in (C/'cases').glob('*.json'))}
+case_cards=json.loads((C/'redesign_cases.json').read_text(encoding='utf-8'))['items']
+for x in data['solutions']+case_cards:
+    if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',x.get('slug','')):raise ValueError('Unsafe solution/case URL slug')
+if len({x['slug'] for x in data['solutions']})!=len(data['solutions']) or len({x['slug'] for x in case_cards})!=len(case_cards):raise ValueError('Duplicate solution/case slugs')
+letters=json.loads((C/'letters.json').read_text(encoding='utf-8'))['items']
+team=json.loads((C/'team.json').read_text(encoding='utf-8'))['items']
 md=MarkdownIt('commonmark',{'html':False,'linkify':True})
-def slugify_ru(s):
-    trans=str.maketrans('абвгдеёзийклмнопрстуфхцчшщъыьэюя','abvgdeezijklmnoprstufhccss_y_eua')
-    s=s.lower().translate(trans);s=re.sub('[^a-z0-9]+','-',s).strip('-')
-    return s[:72] or 'section'
 articles=[]
-for f in (CONTENT/'posts').glob('*.md'):
-    raw=f.read_text(encoding='utf-8'); match=re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$',raw,re.S)
-    if not match: raise ValueError(f'No YAML frontmatter: {f}')
-    meta=yaml.safe_load(match.group(1)); body=match.group(2)
-    if args.production and not meta.get('published',False):continue
-    if args.production and meta.get('published') and (meta.get('editorial_status')!='approved' or not meta.get('reviewed_by') or not meta.get('reviewed_on')):
-        raise ValueError(f'Article publication lacks editorial approval: {f.name}')
-    text=md.render(body)
-    soup=BeautifulSoup(text,'html.parser'); heads=[]
-    for h in soup.select('h2'):
-        anchor=slugify_ru(h.get_text());h['id']=anchor
-        heads.append({'id':anchor,'title':h.get_text()})
-    meta['html']=str(soup);meta['headings']=heads;meta['word_count']=len(body.split());meta['related']=[service_map[s] for s in meta.get('related_services',[]) if s in service_map]
-    meta['date']=str(meta.get('date',''));meta['modified']=str(meta.get('modified',meta['date']))
-    meta['published']=meta.get('published',False);articles.append(meta)
-articles.sort(key=lambda x:x['date'],reverse=True)
-# CMS-managed standalone pages: a separate, allowlisted URL namespace avoids
-# shadowing the approved 7 service URLs, blog, admin, cases, or static assets.
-custom_pages=[]
-for f in sorted((CONTENT/'pages').glob('*.md')):
-    raw=f.read_text(encoding='utf-8');m=re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$',raw,re.S)
-    if not m:raise ValueError(f'Missing page frontmatter: {f}')
+for f in (C/'posts').glob('*.md'):
+    raw=f.read_text(encoding='utf-8')
+    m=re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$',raw,re.S)
+    if not m: continue
     meta=yaml.safe_load(m.group(1))
-    if meta.get('section') not in ('stranicy','resheniya','materialy'):
-        raise ValueError(f'Invalid new page section in {f.name}')
-    if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',str(meta.get('slug',''))) or meta['slug']!=f.stem:
-        raise ValueError(f'Invalid new page slug in {f.name}')
-    if args.production and not meta.get('published',False):continue
-    if args.production and meta.get('published') and (meta.get('editorial_status')!='approved' or not meta.get('reviewed_by') or not meta.get('reviewed_on') or not meta.get('source_notes')):
-        raise ValueError(f'New page publication lacks editorial approval: {f.name}')
-    parsed=BeautifulSoup(md.render(m.group(2)),'html.parser');heads=[];used=set()
-    for h in parsed.select('h2'):
-        base=slugify_ru(h.get_text());anchor=base;n=2
-        while anchor in used:anchor=f'{base}-{n}';n+=1
-        used.add(anchor);h['id']=anchor;heads.append({'id':anchor,'title':h.get_text()})
-    meta['html']=str(parsed);meta['headings']=heads
-    meta['related']=[service_map[x] for x in meta.get('related_services',[]) if x in service_map]
-    custom_pages.append(meta)
+    if args.production and meta.get('published') and (meta.get('editorial_status')!='approved' or not meta.get('reviewed_by') or not meta.get('reviewed_on')):
+        raise ValueError('Unapproved blog article: '+f.name)
+    if args.production and not meta.get('published'):continue
+    parsed=BeautifulSoup(md.render(m.group(2)),'html.parser')
+    headings=[]
+    for n,h in enumerate(parsed.find_all('h2')):
+        anchor='section-'+str(n+1)
+        h['id']=anchor
+        headings.append({'id':anchor,'title':h.get_text()})
+    meta['html']=str(parsed);meta['headings']=headings
+    meta['date']=str(meta.get('date',''));meta['published']=bool(meta.get('published'))
+    articles.append(meta)
+articles.sort(key=lambda x:x['date'],reverse=True)
+category_names={'marketing':'Маркетинг','lidogeneraciya':'Лидогенерация','reklama':'Реклама','sajty':'Сайты','crm':'CRM','seo':'SEO'}
+custom_pages=[]
+for f in (C/'pages').glob('*.md'):
+    raw=f.read_text(encoding='utf-8');m=re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$',raw,re.S)
+    if not m:continue
+    x=yaml.safe_load(m.group(1))
+    if x.get('section') not in ['stranicy','resheniya','materialy'] or not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',x.get('slug','')) or x['slug']!=f.stem:raise ValueError('Unsafe CMS page '+f.name)
+    if args.production and x.get('published') and (x.get('editorial_status')!='approved' or not x.get('reviewed_by') or not x.get('reviewed_on')):raise ValueError('Unapproved custom page '+f.name)
+    if x['section']=='resheniya' and x['slug'] in {q['slug'] for q in data['solutions']}:raise ValueError('Custom page collides with paid solution: '+x['slug'])
+    if args.production and not x.get('published'):continue
+    x['html']=md.render(m.group(2));custom_pages.append(x)
 
-env=Environment(loader=FileSystemLoader(str(ROOT/'templates')),autoescape=select_autoescape(['html','xml']),trim_blocks=True,lstrip_blocks=True)
-base_url=site['domain'].rstrip('/')
-org={"@context":"https://schema.org","@type":"Organization","@id":base_url+"/#organization","name":"Expert Team","url":base_url,"email":site['email'],"foundingDate":site['founded'],"logo":base_url+"/assets/og.png","sameAs":[site['telegram']]}
-website={"@context":"https://schema.org","@type":"WebSite","@id":base_url+"/#website","url":base_url,"name":"Expert Team","publisher":{"@id":base_url+"/#organization"}}
-# Do not emit SearchAction until on-site search exists: no fake actions.
-now=datetime.date.today().isoformat();year=datetime.date.today().year
-routes=[]
-def crumbs_schema(path,items):
-    chain=[{'name':'Главная','url':base_url+'/'}]+items
-    return {'@context':'https://schema.org','@type':'BreadcrumbList','itemListElement':[{'@type':'ListItem','position':n+1,'name':c['name'],'item':c['url']} for n,c in enumerate(chain)]}
-def html_page(path,template,title,desc,typ='static',extra=None,schema=None,indexable=None):
-    path='/' + path.strip('/')+'/' if path!='/' else '/'
-    canonical=base_url+path
-    is_indexable=(args.production if indexable is None else bool(indexable))
-    ctx={'site':site,'services':services,'cases':cases,'articles':articles,'domain':base_url,'year':year,'type':typ,'canonical':canonical,'indexable':is_indexable,'meta':{'title':title,'description':desc},'category_names':category_names,'schemas':[org,website], 'form_endpoint':os.environ.get('EXPERTTEAM_FORM_ENDPOINT','') if args.production else ''}
-    if schema:ctx['schemas']+=schema
-    ctx.update(extra or {})
-    ctx['meta']['og_image']=(base_url+ctx['article']['cover_image']) if typ=='article' and ctx['article'].get('cover_image','').startswith('/') else base_url+'/assets/og.png'
-    target=OUT/path.strip('/')/'index.html' if path!='/' else OUT/'index.html';target.parent.mkdir(parents=True,exist_ok=True)
-    target.write_text(env.get_template(template).render(**ctx),encoding='utf-8')
-    routes.append({'url':path,'title':title,'type':typ,'index':is_indexable,'lastmod':now,'priority':'1.0' if path=='/' else '0.8' if typ=='service' else '0.6','changefreq':'weekly' if typ=='blog' else 'monthly'})
+# Cached, transparent versions of the 39 customer-provided elements are already in static/assets.
+# Site is staged on pages.dev; canonical points to that staging URL for the draft, production to expertteam.pro.
+base='https://expertteam.pro' if args.production else 'https://expteam-staging.pages.dev'
+root=ROOT/'templates'/'redesign'
+env=Environment(loader=FileSystemLoader(str(root)),autoescape=select_autoescape(['html','xml']),trim_blocks=True,lstrip_blocks=True)
+env.filters['asset']=lambda n:'/assets/brand/ExpertTeam_Asset_%02d.webp'%int(n)
+now=datetime.date.today().isoformat()
+route_rows=[]
 
-html_page('/','home.html',seo_static['home']['title'],seo_static['home']['description'],typ='home',extra={'home_faq':faq_home},schema=[{'@context':'https://schema.org','@type':'WebPage','name':'Маркетинговое агентство Expert Team','url':base_url+'/'}])
-for s in services:
-    path=f"/uslugi/{s['slug']}/"
-    service_schema={'@context':'https://schema.org','@type':'Service','@id':base_url+path+'#service','name':s['name'],'description':s['description'],'serviceType':s['keyword'],'provider':{'@id':base_url+'/#organization'},'areaServed':{'@type':'Country','name':'Россия'},'url':base_url+path}
-    # Confirmed starting price applies to outsourced marketing only.
-    if s['slug']=='marketing-na-autsorse':service_schema['offers']={'@type':'Offer','price':'35000','priceCurrency':'RUB','description':'Стартовая стоимость за месяц; состав работ уточняется'}
-    crumbs=[{'name':'Услуги','url':base_url+'/#services'},{'name':s['name'],'url':base_url+path}]
-    faq_schema={'@context':'https://schema.org','@type':'FAQPage','mainEntity':[{'@type':'Question','name':x['q'],'acceptedAnswer':{'@type':'Answer','text':x['a']}} for x in s['faqs']]}
-    # FAQPage is the semantically appropriate type for a publisher-written list of FAQs. QAPage is for single question with community answers; Google rich result eligibility is limited.
-    featured=next((c for c in cases if c['related']==s['slug']),cases[0])
-    related=[service_map[x] for x in s['related'] if x in service_map]
-    html_page(path,'service.html',s['title'],s['description'],typ='service',extra={'service':s,'seo_guides':[(a,b) for a,b in seo_guides.get(s['slug'],[])],'featured_case':featured,'case_index':cases.index(featured)+1,'related':related},schema=[crumbs_schema(path,crumbs),service_schema,faq_schema])
-html_page('/kejsy/','cases.html',seo_static['cases']['title'],seo_static['cases']['description'],typ='cases',extra={'industries':sorted({c['industry'] for c in cases})},schema=[crumbs_schema('/kejsy/',[{'name':'Кейсы','url':base_url+'/kejsy/'}])])
-for c in cases:
-    path='/kejsy/'+c['slug']+'/'
-    case_schema={'@context':'https://schema.org','@type':'Article','headline':'Кейс '+c['name'],'description':c['intro'],'author':{'@id':base_url+'/#organization'},'publisher':{'@id':base_url+'/#organization'},'mainEntityOfPage':base_url+path,'image':base_url+'/assets/og.png'}
-    html_page(path,'case.html',c.get('seo_title') or f"{c['name']} — кейс маркетинга | Expert Team",c.get('seo_description') or c['intro'],typ='case',extra={'case':c},schema=[crumbs_schema(path,[{'name':'Кейсы','url':base_url+'/kejsy/'},{'name':c['name'],'url':base_url+path}]),case_schema])
-html_page('/o-kompanii/','about.html',seo_static['about']['title'],seo_static['about']['description'],typ='about',schema=[crumbs_schema('/o-kompanii/',[{'name':'О компании','url':base_url+'/o-kompanii/'}])])
-html_page('/ceny/','prices.html',seo_static['prices']['title'],seo_static['prices']['description'],typ='prices',extra={'prices':prices},schema=[crumbs_schema('/ceny/',[{'name':'Цены','url':base_url+'/ceny/'}])])
-html_page('/kontakty/','contact.html',seo_static['contacts']['title'],seo_static['contacts']['description'],typ='contacts',schema=[crumbs_schema('/kontakty/',[{'name':'Контакты','url':base_url+'/kontakty/'}]),{'@context':'https://schema.org','@type':'ContactPage','name':'Контакты Expert Team'}])
-html_page('/blog/','blog.html',seo_static['blog']['title'],seo_static['blog']['description'],typ='blog',extra={'active_category':None},indexable=bool(args.production and articles),schema=[crumbs_schema('/blog/',[{'name':'Блог','url':base_url+'/blog/'}])])
-for slug,label in category_names.items():
-    matches=[a for a in articles if a['category']==slug]
-    html_page('/blog/'+slug+'/','blog.html',f'{label}: статьи и руководства | Expert Team',f'Статьи и материалы Expert Team на тему {label.lower()}.',typ='blog',extra={'active_category':slug,'articles':matches},indexable=bool(args.production and matches),schema=[crumbs_schema('/blog/'+slug+'/',[{'name':'Блог','url':base_url+'/blog/'},{'name':label,'url':base_url+'/blog/'+slug+'/'}])])
+def render(path,template,title,description,typ,ctx=None,indexable=None):
+    path='/' + path.strip('/') + '/' if path!='/' else '/'
+    canonical=base+path
+    indexable=(bool(args.production) if indexable is None else bool(indexable))
+    context=dict(site=site,content=data,solutions=data['solutions'],cases=case_cards,letters=letters,team=team,articles=articles,category_names=category_names,now=now,year=datetime.date.today().year,base=base,meta={'title':title,'description':description},canonical=canonical,indexable=indexable,type=typ,form_endpoint=os.environ.get('EXPERTTEAM_FORM_ENDPOINT','') if args.production else '',contact_telegram=site.get('telegram',''),scripts=[])
+    context.update(ctx or {})
+    target=OUT/path.strip('/')/'index.html' if path!='/' else OUT/'index.html'
+    target.parent.mkdir(parents=True,exist_ok=True)
+    target.write_text(env.get_template(template).render(**context),encoding='utf-8')
+    route_rows.append(dict(path=path,title=title,type=typ,indexable=indexable))
+
+render('/','home.html','Комплексный маркетинг для B2B и производства — от 35 000 ₽ | Expert Team','Внешний отдел маркетинга: стратегия, реклама, материалы, CRM и лидогенерация. Команда от 35 000 ₽/мес. Бесплатный маркетинговый план.', 'home')
+for s in data['solutions']:
+    render('/resheniya/'+s['slug']+'/','solution.html',s['name']+' | Expert Team',s['intro'],'solution',dict(solution=s,focus_cases=[x for x in case_cards if (s['slug']=='kompleksnyj-marketing' or x['slug'] in ['astra','europack','homeoffice'])][:3]))
+render('/marketingovyj-plan/','plan.html','Бесплатный маркетинговый план и расчёт бюджета | Expert Team','Бесплатно разберём задачу: сегменты, каналы, гипотезы, презентация и таблица маркетинговых бюджетов.','plan')
+render('/kejsy/','cases.html','Кейсы маркетинга для B2B, производства и услуг | Expert Team','Кейсы по привлечению лидов и развитию маркетинга: производство, услуги, IT.','cases')
+for ca in case_cards:
+    render('/kejsy/'+ca['slug']+'/','case.html',ca['name']+' — кейс маркетинга | Expert Team',ca['intro'],'case',dict(case=ca))
+render('/o-kompanii/','about.html','О команде Expert Team — маркетинг с 2018 года','Внешний отдел маркетинга: маркетолог, руководитель проектов и руководитель агентства. Работаем с 2018 года.','about')
+render('/kontakty/','contact.html','Контакты Expert Team — обсудить маркетинг компании','Связаться с Expert Team, получить маркетинговый план или обсудить комплексный маркетинг.','contacts')
+render('/blog/','blog.html','Блог Expert Team — маркетинг, лидогенерация, CRM','Практические материалы о B2B-маркетинге, поиске клиентов, рекламе, CRM и маркетинге на аутсорсе.','blog')
 for a in articles:
-    path='/blog/'+a['slug']+'/'
-    article_schema={'@context':'https://schema.org','@type':'Article','headline':a['title'],'description':a['description'],'datePublished':a['date'],'dateModified':a['modified'],'author':{'@type':'Organization' if a['author'].startswith('Редакция ') else 'Person','name':a['author']},'publisher':{'@id':base_url+'/#organization'},'mainEntityOfPage':base_url+path,'image':(base_url+a['cover_image'] if a.get('cover_image','').startswith('/') else base_url+'/assets/og.png')}
-    html_page(path,'article.html',f"{a['title']} | Expert Team",a['description'],typ='article',extra={'article':a},schema=[crumbs_schema(path,[{'name':'Блог','url':base_url+'/blog/'},{'name':category_names[a['category']],'url':base_url+'/blog/'+a['category']+'/'},{'name':a['title'],'url':base_url+path}]),article_schema],indexable=bool(args.production and a['published']))
-for p in custom_pages:
-    path=f"/{p['section']}/{p['slug']}/"
-    custom_schema={'@context':'https://schema.org','@type':'WebPage','name':p['h1'],'description':p['description'],'url':base_url+path}
-    html_page(path,'page.html',p['seo_title'],p['description'],typ='page',
-              extra={'page':p},schema=[crumbs_schema(path,[{'name':p['title'],'url':base_url+path}]),custom_schema],
-              indexable=bool(args.production and p.get('published',False)))
-html_page('/politika-konfidencialnosti/','privacy.html' ,'Политика конфиденциальности | Expert Team','Страница политики конфиденциальности Expert Team.',typ='legal',indexable=False)
-html_page('/404/','404.html','Страница не найдена — 404 | Expert Team','Ошибка 404. Перейти на главную страницу Expert Team.',typ='error',indexable=False)
-shutil.copyfile(OUT/'404'/'index.html',OUT/'404.html')
-(OUT/'assets').mkdir(exist_ok=True)
-shutil.copyfile(ROOT/'static/css/style.css',OUT/'assets/style.css')
-shutil.copyfile(ROOT/'static/js/site.js',OUT/'assets/site.js')
-if (ROOT/'static/downloads').exists(): shutil.copytree(ROOT/'static/downloads',OUT/'downloads',dirs_exist_ok=True)
+    render('/blog/'+a['slug']+'/','article.html',a['title']+' | Expert Team',a.get('description',''),'article',dict(article=a),indexable=bool(args.production and a.get('published')))
+for slug,label in category_names.items():
+    render('/blog/'+slug+'/','blog.html',f'{label} — статьи Expert Team',f'Материалы Expert Team по теме «{label}».','blog',dict(filtered_category=slug),indexable=False)
+render('/materialy/marketolog-ili-komanda/','compare.html','Маркетолог в штате или команда на аутсорсе: сравнение | Expert Team','Сравните штатный маркетинг и внешнюю команду: состав работы, риски и расходы. Бесплатный калькулятор затрат.','compare')
+render('/kalkulyator-marketologa/','calculator.html','Калькулятор затрат: маркетолог в штате или Expert Team','Рассчитайте сценарные месячные затраты на штатного маркетолога и внешнюю команду с учётом задач и бюджета.','calculator')
+for x in custom_pages:
+    render('/'+x['section']+'/'+x['slug']+'/','custom.html',x['seo_title'],x['description'],'custom',dict(page=x),indexable=bool(args.production and x.get('published')))
+render('/politika-konfidencialnosti/','privacy.html','Политика конфиденциальности | Expert Team','Информация об обработке персональных данных.','privacy',indexable=False)
+render('/404/','404.html','Страница не найдена — Expert Team','Запрашиваемая страница не найдена.','error',indexable=False)
+shutil.copy2(OUT/'404/index.html',OUT/'404.html')
+# Keep legacy URLs by using Cloudflare Pages _redirects (and a JS/meta fallback for local preview).
+redirects={
+ '/uslugi/marketing-na-autsorse/':'/resheniya/kompleksnyj-marketing/',
+ '/uslugi/marketing-pod-klyuch/':'/resheniya/kompleksnyj-marketing/',
+ '/uslugi/lidogeneraciya/':'/resheniya/leadstore-koll-centr/',
+ '/uslugi/nastrojka-reklamy/':'/resheniya/kompleksnyj-marketing/',
+ '/uslugi/sozdanie-sajtov/':'/resheniya/kompleksnyj-marketing/',
+ '/uslugi/crm-marketing/':'/resheniya/kompleksnyj-marketing/',
+ '/uslugi/seo/':'/resheniya/kompleksnyj-marketing/',
+ '/ceny/':'/#pricing',
+ '/uslugi/':'/#solutions'
+}
+(OUT/'_redirects').write_text('\n'.join(k+' '+v+' 301' for k,v in redirects.items())+'\n',encoding='utf-8')
+for old,new in redirects.items():
+    target=OUT/old.strip('/')/'index.html';target.parent.mkdir(parents=True,exist_ok=True)
+    target.write_text('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta http-equiv="refresh" content="0; url='+html.escape(new,quote=True)+'"><title>Страница переехала</title><p>Новый адрес: <a href="'+html.escape(new,quote=True)+'">Открыть страницу</a></p></html>',encoding='utf-8')
+# Copy site static files.
+(OUT/'assets').mkdir()
+shutil.copy2(ROOT/'static/css/redesign.css',OUT/'assets/style.css')
+shutil.copy2(ROOT/'static/js/redesign.js',OUT/'assets/site.js')
+shutil.copytree(ROOT/'static/assets',OUT/'assets/brand',dirs_exist_ok=True,ignore=shutil.ignore_patterns('*.png','expertteam-original.svg'))
 if (ROOT/'static/uploads').exists():shutil.copytree(ROOT/'static/uploads',OUT/'assets/uploads',dirs_exist_ok=True)
-(OUT/'admin').mkdir(exist_ok=True)
-shutil.copyfile(ROOT/'static/admin/index.html',OUT/'admin/index.html') if (ROOT/'static/admin/index.html').exists() else None
-shutil.copyfile(ROOT/'static/admin/config.yml',OUT/'admin/config.yml') if (ROOT/'static/admin/config.yml').exists() else None
-# Static assets: responsive SVG/PNG logo, Open Graph preview.
-(OUT/'assets/favicon.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect width="80" height="80" rx="15" fill="#101410"/><path d="M20 22H62V31H30V37H55V46H30V54H62V63H20Z" fill="#d5ff45"/></svg>',encoding='utf-8')
-im=Image.new('RGB',(64,64),'#111410');d=ImageDraw.Draw(im);d.rectangle((14,14,50,22),fill='#d5ff45');d.rectangle((14,14,22,51),fill='#d5ff45');d.rectangle((14,28,43,36),fill='#d5ff45');d.rectangle((14,43,50,51),fill='#d5ff45');im.save(OUT/'assets/favicon.png')
-im=Image.new('RGB',(1200,630),'#111410');d=ImageDraw.Draw(im)
-for x in range(0,1200,70):d.line([(x,0),(x,630)],fill='#242b22',width=1)
-for y in range(0,630,70):d.line([(0,y),(1200,y)],fill='#242b22',width=1)
+if (ROOT/'static/downloads').exists():shutil.copytree(ROOT/'static/downloads',OUT/'downloads',dirs_exist_ok=True)
+(OUT/'admin').mkdir()
+for file in ['index.html','config.yml']:shutil.copy2(ROOT/'static/admin'/file,OUT/'admin'/file)
+(OUT/'assets/favicon.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#0F09FF"/><path d="M13 18h37v8H22v7h23v8H22v7h28v8H13Z" fill="#fff"/></svg>',encoding='utf-8')
+(OUT/'manifest.webmanifest').write_text(json.dumps({'name':'Expert Team','short_name':'Expert Team','start_url':'/','display':'browser','theme_color':'#0F09FF','background_color':'#FFFFFF','icons':[{'src':'/assets/favicon.svg','sizes':'any','type':'image/svg+xml'}]},ensure_ascii=False),encoding='utf-8')
+# OG card: never create fake proof; typography-only layout.
+img=Image.new('RGB',(1200,630),'#FFFFFF');d=ImageDraw.Draw(img)
 fontpath='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
-fontbig=ImageFont.truetype(fontpath,94) if Path(fontpath).is_file() else ImageFont.load_default(size=94)
-fontmid=ImageFont.truetype(fontpath,37) if Path(fontpath).is_file() else ImageFont.load_default(size=37)
-d.ellipse((930,105,1190,365),outline='#d5ff45',width=6);d.ellipse((965,140,1155,330),outline='#738b2e',width=3)
-d.text((80,84),'EXPERT TEAM',fill='#d5ff45',font=fontmid)
-d.text((72,208),'MARKETING',fill='#fffef7',font=fontbig);d.text((72,325),'THAT WORKS.',fill='#d5ff45',font=fontbig)
-d.text((80,525),'СТРАТЕГИЯ  /  ТРАФИК  /  CRM  /  SEO',fill='#e0e5d7',font=ImageFont.truetype(fontpath,24) if Path(fontpath).is_file() else ImageFont.load_default(size=24))
-im.save(OUT/'assets/og.png',optimize=True)
-# Technical SEO files
-robots=("User-agent: *\n"+("Allow: /\nDisallow: /admin/\nDisallow: /api/\nDisallow: /search/\nDisallow: /*?*sort=\nDisallow: /*?*filter=\nDisallow: /*?*utm_\n" if args.production else "Disallow: /\n")+"\nUser-agent: GPTBot\n"+("Allow: /\n" if args.production else "Disallow: /\n")+"User-agent: ChatGPT-User\n"+("Allow: /\n" if args.production else "Disallow: /\n")+"User-agent: PerplexityBot\n"+("Allow: /\n" if args.production else "Disallow: /\n")+"User-agent: ClaudeBot\n"+("Allow: /\n" if args.production else "Disallow: /\n")+f"Sitemap: {base_url}/sitemap.xml\n")
-(OUT/'robots.txt').write_text(robots,encoding='utf-8')
-from xml.sax.saxutils import escape as xml_escape
-urls=[r for r in routes if r['index']]
-urls_xml=''.join(f"<url><loc>{xml_escape(base_url+r['url'])}</loc><lastmod>{r['lastmod']}</lastmod><changefreq>{r['changefreq']}</changefreq><priority>{r['priority']}</priority></url>" for r in urls)
-(OUT/'sitemap.xml').write_text('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+urls_xml+'</urlset>',encoding='utf-8')
-llms='# Expert Team — маркетинговая команда для бизнеса\n\nЭкспертиза: маркетинг на аутсорсе, создание сайтов, лидогенерация, реклама, маркетинг под ключ, CRM-маркетинг, SEO. С 2018 года, работает удалённо по России.\n\n## Услуги\n'
-llms+='\n'.join(f"- [{s['name']}]({base_url}/uslugi/{s['slug']}/): {s['short']}" for s in services)
-llms+=f'\n\n## Полезное\n- [Блог]({base_url}/blog/)\n- [Кейсы]({base_url}/kejsy/)\n- [Цены]({base_url}/ceny/)\n\n## Контакты\n- Email: {site["email"]}\n- Telegram: {site["telegram"]}\n'
-(OUT/'llms.txt').write_text(llms,encoding='utf-8')
-(OUT/'manifest.webmanifest').write_text(json.dumps({'name':'Expert Team','short_name':'Expert Team','start_url':'/','display':'browser','background_color':'#111410','theme_color':'#111410','icons':[{'src':'/assets/favicon.png','sizes':'64x64','type':'image/png'}]},ensure_ascii=False),encoding='utf-8')
-(ROOT/'docs/routes.generated.json').write_text(json.dumps(routes,ensure_ascii=False,indent=2),encoding='utf-8')
-print(f'Built {len(routes)} HTML routes, {len(services)} services, {len(articles)} visible articles, {len(custom_pages)} custom pages. Production SEO: {args.production}. Indexed sitemap entries: {len(urls)}')
+fontb=ImageFont.truetype(fontpath,80) if Path(fontpath).exists() else ImageFont.load_default()
+fontm=ImageFont.truetype(fontpath,35) if Path(fontpath).exists() else ImageFont.load_default()
+d.rectangle([0,0,1200,17],fill='#0F09FF');d.text((70,75),'EXPERT TEAM',font=fontm,fill='#0F09FF');d.text((64,190),'MARKETING',font=fontb,fill='#000000');d.text((64,302),'FOR BUSINESS',font=fontb,fill='#0F09FF');d.text((70,520),'Комплексный маркетинг от 35 000 ₽/мес.',font=fontm,fill='#1B1B1B');img.save(OUT/'assets/og.png',optimize=True)
+(OUT/'robots.txt').write_text('User-agent: *\n'+('Allow: /\nDisallow: /admin/\n' if args.production else 'Disallow: /\n')+'Sitemap: '+base+'/sitemap.xml\n',encoding='utf-8')
+urls=[x for x in route_rows if x['indexable']]
+(OUT/'sitemap.xml').write_text('<?xml version="1.0" encoding="utf-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join('<url><loc>'+xml_escape(base+x['path'])+'</loc><lastmod>'+now+'</lastmod></url>' for x in urls)+'</urlset>',encoding='utf-8')
+(OUT/'llms.txt').write_text('# Expert Team\nВнешний отдел маркетинга для производственных и B2B-компаний.\n'+ '\n'.join(f"- {x['name']}: {base}/resheniya/{x['slug']}/" for x in data['solutions'])+'\n',encoding='utf-8')
+(ROOT/'docs').mkdir(exist_ok=True)
+(ROOT/'docs'/'routes.redesign.json').write_text(json.dumps(route_rows,ensure_ascii=False,indent=2),encoding='utf-8')
+print(f'EXPERT TEAM REDESIGN: {len(route_rows)} content pages, {len(redirects)} redirects, {len(articles)} blog articles. Production: {args.production}.')

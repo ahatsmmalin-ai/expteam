@@ -1,0 +1,40 @@
+{
+  "items": [
+    {
+      "name": "Europack",
+      "image": "",
+      "approved": false,
+      "image_alt": "Благодарственное письмо Europack"
+    },
+    {
+      "name": "МФЦ «Моя Ипотека»",
+      "image": "",
+      "approved": false,
+      "image_alt": "Благодарственное письмо МФЦ «Моя Ипотека»"
+    },
+    {
+      "name": "Onlinetours / HomeOffice",
+      "image": "",
+      "approved": false,
+      "image_alt": "Благодарственное письмо Onlinetours / HomeOffice"
+    },
+    {
+      "name": "Cinemarental",
+      "image": "",
+      "approved": false,
+      "image_alt": "Благодарственное письмо Cinemarental"
+    },
+    {
+      "name": "«Гурман»",
+      "image": "",
+      "approved": false,
+      "image_alt": "Благодарственное письмо «Гурман»"
+    },
+    {
+      "name": "«Раздолье-Консалт»",
+      "image": "",
+      "approved": false,
+      "image_alt": "Благодарственное письмо «Раздолье-Консалт»"
+    }
+  ]
+}

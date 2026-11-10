@@ -1,26 +1,29 @@
-# Открытый репозиторий/авторизация здесь пока НЕ подключены — заполняются только после корпоративной проверки.
+# CMS authorization is NOT enabled. Configure a real OAuth gateway before changing cms_auth_ready.
 backend:
   name: github
-  repo: YOUR_ORG/YOUR_REPO
+  repo: ahatsmmalin-ai/expteam
   branch: main
   squash_merges: true
 publish_mode: editorial_workflow
 media_folder: static/uploads
 public_folder: /assets/uploads
 locale: ru
+cms_auth_ready: false
+site_url: https://expteam-staging.pages.dev
+display_url: https://expteam-staging.pages.dev
 collections:
 - name: settings
-  label: Настройки
+  label: Настройки / основные данные
   files:
-  - file: content/site.json
-    name: site
-    label: Главная / глобальные настройки
+  - name: site
+    label: Глобальные данные и логотип
+    file: content/site.json
     format: json
     fields:
     - label: Бренд
       name: brand
       widget: string
-    - label: Домен
+    - label: Домен (production)
       name: domain
       widget: string
     - label: Email
@@ -29,59 +32,84 @@ collections:
     - label: Telegram
       name: telegram
       widget: string
+    - label: Телефон
+      name: phone
+      widget: string
+      required: false
     - label: ИНН
       name: inn
       widget: string
     - label: Год основания
       name: founded
       widget: string
-    - label: Первый экран — маркер
-      name: hero_eyebrow
-      widget: string
-    - label: Первый экран — заголовок
-      name: hero_title
-      widget: string
-    - label: SEO H1 главной
-      name: home_h1
-      widget: string
-    - label: Первый экран — описание
-      name: hero_sub
-      widget: text
-    - label: Первый экран — подпись
-      name: hero_foot
-      widget: string
-    - label: Миссия
-      name: mission
-      widget: text
-    - label: О компании
+    - label: Логотип — оригинальный файл SVG/PNG
+      name: logo_image
+      widget: image
+      required: false
+    - label: Текст о компании
       name: about
       widget: text
-    - label: Форма — заголовок
-      name: form_title
-      widget: string
-    - label: Форма — описание
-      name: form_description
-      widget: text
-    - label: Отзывы — примечание
-      name: reviews_notice
-      widget: text
-    - label: Команда — примечание
-      name: team_notice
-      widget: text
-    - label: Телефон (если утверждён)
-      name: phone
+      required: false
+    - label: Подпись на главной
+      name: hero_foot
       widget: string
       required: false
-    - label: Подтверждённая стартовая цена
+    - label: Текст формы
+      name: form_description
+      widget: text
+      required: false
+    - label: Заголовок формы
+      name: form_title
+      widget: string
+      required: false
+    - label: Подтверждённая цена
       name: price_confirmed
       widget: string
-  - file: content/home_faq.json
-    name: home_faq
-    label: FAQ главной
+  - name: redesign
+    label: Главная / решения / FAQ
+    file: content/redesign.json
     format: json
     fields:
-    - label: Вопросы
-      name: items
+    - label: Основной H1
+      name: hero_title
+      widget: string
+    - label: 'Первый экран: описание'
+      name: hero_sub
+      widget: text
+    - label: 'Первый экран: факты'
+      name: hero_note
+      widget: string
+    - label: Текст первой кнопки
+      name: primary_cta
+      widget: string
+    - label: Описание бесплатного плана
+      name: plan_intro
+      widget: text
+    - label: Комплекс работ
+      name: scope
+      widget: list
+      fields:
+      - label: Название
+        name: title
+        widget: string
+      - label: Описание
+        name: description
+        widget: text
+      - label: Иконка из ZIP (01–39)
+        name: icon
+        widget: number
+        value_type: int
+        min: 1
+        max: 39
+    - label: Операционные задачи
+      name: operations
+      widget: list
+      field:
+        label: Задача
+        name: item
+        widget: string
+    - label: Вопросы главной
+      name: home_faq
       widget: list
       fields:
       - label: Вопрос
@@ -90,244 +118,185 @@ collections:
       - label: Ответ
         name: a
         widget: text
-  - file: content/prices.json
-    name: prices
-    label: Тарифы и пакеты
-    format: json
-    fields:
-    - label: Три пакета
-      name: packages
+    - label: Три решения
+      name: solutions
       widget: list
       fields:
-      - label: Номер
-        name: number
+      - label: Слаг
+        name: slug
+        widget: string
+      - label: Метка
+        name: label
         widget: string
       - label: Название
         name: name
         widget: string
-      - label: Отображаемая цена
+      - label: Оффер / H1
+        name: headline
+        widget: string
+      - label: Введение
+        name: intro
+        widget: text
+      - label: Цена
         name: price
         widget: string
-      - label: Единица
-        name: unit
-        widget: string
-        required: false
-      - label: Цена подтверждена
-        name: verified
-        widget: boolean
-      - label: Описание
-        name: description
-        widget: text
-      - label: Что входит
-        name: includes
-        widget: list
-        field:
-          label: Пункт
-          name: item
-          widget: string
-      - label: CTA
+      - label: Кнопка
         name: cta
         widget: string
-  - file: content/seo.json
-    name: seo_static
-    label: 'SEO: главная, кейсы, цены, о компании, контакты, блог'
+      - label: Иконка (01–39)
+        name: icon
+        widget: number
+        value_type: int
+        min: 1
+        max: 39
+      - label: Этапы работ
+        name: steps
+        widget: list
+        fields:
+        - label: Название этапа
+          name: title
+          widget: string
+        - label: Описание этапа
+          name: description
+          widget: text
+      - label: FAQ решения
+        name: faqs
+        widget: list
+        fields:
+        - label: Вопрос
+          name: q
+          widget: string
+        - label: Ответ
+          name: a
+          widget: text
+  - name: cases
+    label: Каталог кейсов (9+)
+    file: content/redesign_cases.json
     format: json
     fields:
-    - name: home
-      label: Главная
-      widget: object
+    - label: Кейсы
+      name: items
+      widget: list
       fields:
-      - label: SEO Title
-        name: title
+      - label: URL-слаг
+        name: slug
         widget: string
-      - label: Description
-        name: description
-        widget: text
-    - name: cases
-      label: Кейсы
-      widget: object
-      fields:
-      - label: SEO Title
-        name: title
+      - label: Компания
+        name: name
         widget: string
-      - label: Description
-        name: description
-        widget: text
-    - name: about
-      label: О компании
-      widget: object
-      fields:
-      - label: SEO Title
-        name: title
+      - label: Отрасль
+        name: sector
         widget: string
-      - label: Description
-        name: description
-        widget: text
-    - name: prices
-      label: Цены
-      widget: object
-      fields:
-      - label: SEO Title
-        name: title
+      - label: Фильтр отрасли
+        name: category
+        widget: select
+        options:
+        - label: Производство
+          value: manufacturing
+        - label: Услуги
+          value: services
+        - label: IT
+          value: it
+      - label: Крупный показатель
+        name: metric
         widget: string
-      - label: Description
-        name: description
-        widget: text
-    - name: contacts
-      label: Контакты
-      widget: object
-      fields:
-      - label: SEO Title
-        name: title
+      - label: Подпись к показателю
+        name: metric_caption
         widget: string
-      - label: Description
-        name: description
+      - label: Описание
+        name: intro
         widget: text
-    - name: blog
-      label: Блог
-      widget: object
-      fields:
-      - label: SEO Title
-        name: title
+      - label: Что сделали
+        name: work
+        widget: list
+        field:
+          label: Действие
+          name: item
+          widget: string
+      - label: Итог
+        name: result
+        widget: text
+      - label: Период
+        name: period
         widget: string
-      - label: Description
-        name: description
-        widget: text
-- name: guides
-  label: SEO-блоки страниц услуг
-  folder: content/guides
-  create: false
-  extension: json
-  format: json
-  identifier_field: slug
-  fields:
-  - label: URL-слаг
-    name: slug
-    widget: hidden
-  - label: SEO-разделы
-    name: sections
-    widget: list
+      - label: Иконка из ZIP
+        name: icon
+        widget: number
+        value_type: int
+        min: 1
+        max: 39
+      - label: Статус подтверждения
+        name: status
+        widget: select
+        options:
+        - needs_approval
+        - approved
+      - label: Скриншоты и подтверждающие материалы
+        name: screenshots
+        widget: list
+        field:
+          label: Изображение
+          name: image
+          widget: image
+        required: false
+  - name: letters
+    label: Настоящие благодарственные письма
+    file: content/letters.json
+    format: json
     fields:
-    - label: Заголовок H2
-      name: title
-      widget: string
-    - label: Описание
-      name: text
-      widget: text
-- name: services
-  label: Услуги (7 страниц)
-  folder: content/services
-  create: false
-  identifier_field: name
-  extension: json
-  format: json
-  fields:
-  - label: URL-слаг
-    name: slug
-    widget: hidden
-  - label: Номер
-    name: code
-    widget: string
-  - label: Название
-    name: name
-    widget: string
-  - label: Краткое описание
-    name: short
-    widget: text
-  - label: SEO Title
-    name: title
-    widget: string
-  - label: SEO Description
-    name: description
-    widget: text
-  - label: H1
-    name: h1
-    widget: string
-  - label: Текст первого экрана
-    name: lead
-    widget: text
-  - label: Маркер
-    name: tag
-    widget: string
-  - label: Цена / формат
-    name: price
-    widget: string
-  - label: Основной ключ
-    name: keyword
-    widget: string
-  - label: Акцент
-    name: accent
-    widget: select
-    options:
-    - lime
-    - orange
-    - violet
-  - label: Боли клиентов
-    name: pains
-    widget: list
-    field:
-      label: Боль
-      name: item
-      widget: string
-  - label: Что входит
-    name: includes
-    widget: list
+    - label: Письма
+      name: items
+      widget: list
+      fields:
+      - label: Клиент
+        name: name
+        widget: string
+      - label: Скан письма
+        name: image
+        widget: image
+        required: false
+      - label: Alt-текст
+        name: image_alt
+        widget: string
+        required: false
+      - label: Согласовано к публикации
+        name: approved
+        widget: boolean
+        default: false
+  - name: team
+    label: Реальные фотографии команды
+    file: content/team.json
+    format: json
     fields:
-    - label: Название
-      name: title
-      widget: string
-    - label: Описание
-      name: text
-      widget: text
-  - label: Для кого
-    name: segments
-    widget: list
-    fields:
-    - label: Сегмент
-      name: title
-      widget: string
-    - label: Описание
-      name: text
-      widget: text
-  - label: Этапы
-    name: steps
-    widget: list
-    fields:
-    - label: Этап
-      name: title
-      widget: string
-    - label: Описание
-      name: text
-      widget: text
-  - label: Инструменты
-    name: tools
-    widget: list
-    field:
-      label: Инструмент
-      name: item
-      widget: string
-  - label: FAQ
-    name: faqs
-    widget: list
-    fields:
-    - label: Вопрос
-      name: q
-      widget: string
-    - label: Ответ
-      name: a
-      widget: text
-  - label: Цитата / принцип
-    name: quote
-    widget: text
-  - label: Связанные услуги (слаги)
-    name: related
-    widget: list
-    field:
-      label: Слаг
-      name: slug
-      widget: string
+    - label: Участники/роли
+      name: items
+      widget: list
+      fields:
+      - label: Роль
+        name: role
+        widget: string
+      - label: Реальное имя
+        name: name
+        widget: string
+        required: false
+      - label: Должность и задачи
+        name: description
+        widget: text
+      - label: Метка роли
+        name: label
+        widget: string
+      - label: Временная иконка из ZIP
+        name: icon
+        widget: number
+        value_type: int
+        min: 1
+        max: 39
+      - label: Фото при наличии согласия
+        name: photo
+        widget: image
+        required: false
 - name: articles
-  label: SEO-блог
+  label: Блог / SEO-статьи
   folder: content/posts
   create: true
   format: frontmatter
@@ -347,60 +316,63 @@ collections:
     name: category
     widget: select
     options:
-    - marketing
-    - lidogeneraciya
-    - reklama
-    - sajty
-    - crm
-    - seo
+    - label: Маркетинг
+      value: marketing
+    - label: Лидогенерация
+      value: lidogeneraciya
+    - label: Реклама
+      value: reklama
+    - label: Сайты
+      value: sajty
+    - label: CRM
+      value: crm
+    - label: SEO
+      value: seo
   - label: Главный запрос
     name: keyword
     widget: string
-  - label: SEO Description
+  - label: SEO description
     name: description
     widget: text
-  - label: Автор (реальный)
+  - label: Автор
     name: author
     widget: string
-  - label: Должность автора (подтверждённая)
+  - label: Роль автора
     name: author_role
     widget: string
     required: false
-  - label: Биография автора (подтверждённая)
+  - label: Биография автора
     name: author_bio
     widget: text
     required: false
-  - label: Изображение (реальное, права проверены)
+  - label: Обложка
     name: cover_image
     widget: image
     required: false
-  - label: Alt изображения
+  - label: Alt
     name: image_alt
     widget: string
     required: false
-  - label: Редакционный статус
+  - label: Статус
     name: editorial_status
     widget: select
     options:
-    - label: Черновик
-      value: draft
-    - label: На проверке фактов
-      value: factcheck
-    - label: Согласовано
-      value: approved
+    - draft
+    - factcheck
+    - approved
     default: draft
-  - label: Проверил редактор (имя)
+  - label: Кто проверил
     name: reviewed_by
     widget: string
     required: false
-  - label: Дата утверждения редактором
+  - label: Когда проверили
     name: reviewed_on
     widget: datetime
+    required: false
     date_format: YYYY-MM-DD
     time_format: false
     format: YYYY-MM-DD
-    required: false
-  - label: Основания и источники фактов
+  - label: Источники
     name: source_notes
     widget: text
     required: false
@@ -414,121 +386,50 @@ collections:
     date_format: YYYY-MM-DD
     time_format: false
     format: YYYY-MM-DD
-  - label: Дата обновления
+  - label: Обновление
     name: modified
     widget: datetime
     date_format: YYYY-MM-DD
     time_format: false
     format: YYYY-MM-DD
-  - label: Смежные страницы услуг
+  - label: Связанные услуги (legacy)
     name: related_services
     widget: list
     field:
-      label: URL-слаг услуги
+      label: Слаг
       name: slug
       widget: string
-  - label: Статья
+    required: false
+  - label: Текст статьи
     name: body
     widget: markdown
-  - label: Редакторская отметка / источник фактов
+  - label: Отметка редактора
     name: review_note
     widget: text
     required: false
-  description: Публиковать только после проверки фактов, согласований и ссылок. Черновики не индексируются.
-- name: cases
-  label: Кейсы
-  folder: content/cases
-  create: true
-  format: json
-  extension: json
-  slug: '{{fields.slug}}'
-  identifier_field: name
-  fields:
-  - label: URL-слаг
-    name: slug
-    widget: string
-  - label: Клиент
-    name: name
-    widget: string
-  - label: Отрасль
-    name: industry
-    widget: string
-  - label: Показатель
-    name: metric
-    widget: string
-  - label: Подпись
-    name: metric_label
-    widget: string
-  - label: Описание
-    name: intro
-    widget: text
-  - label: Задача
-    name: challenge
-    widget: text
-  - label: Работы
-    name: work
-    widget: list
-    field:
-      label: Действие
-      name: item
-      widget: string
-  - label: Результат
-    name: result
-    widget: text
-  - label: Связанная услуга (слаг)
-    name: related
-    widget: string
-  - label: Источник результатов / подтверждение
-    name: evidence
-    widget: text
-    required: false
-  - label: Согласие клиента на публикацию получено
-    name: client_approved
-    widget: boolean
-    default: false
-  - name: seo_title
-    label: SEO Title
-    widget: string
-    required: false
-  - name: seo_description
-    label: SEO Description
-    widget: text
-    required: false
-  description: Публиковать только после проверки фактов, согласований и ссылок. Черновики не индексируются.
 - name: pages
-  label: Новые страницы (конструктор)
-  label_singular: Страница
+  label: Новые страницы
   folder: content/pages
   create: true
   format: frontmatter
   extension: md
   slug: '{{fields.slug}}'
   identifier_field: title
-  summary: '{{title}} / {{section}} / {{editorial_status}}'
   preview_path: '{{fields.section}}/{{fields.slug}}/'
-  description: Отдельная новая страница в общих стилях сайта. Не создавать дубли страниц услуг и статей. Выпуск
-    требует редакторского согласования.
   fields:
-  - label: Заголовок страницы
+  - label: Название
     name: title
     widget: string
-  - label: URL-слаг латиницей
+  - label: Слаг латиницей
     name: slug
     widget: string
-    pattern:
-    - ^[a-z0-9]+(?:-[a-z0-9]+)*$
-    - Только строчные латинские буквы, цифры и дефис
-  - label: Раздел URL
+  - label: Раздел
     name: section
     widget: select
     options:
-    - label: Страницы /stranicy/
-      value: stranicy
-    - label: Материалы /materialy/
-      value: materialy
-    - label: Решения /resheniya/
-      value: resheniya
-    default: stranicy
+    - stranicy
+    - materialy
+    - resheniya
   - label: SEO Title
     name: seo_title
     widget: string
@@ -538,10 +439,10 @@ collections:
   - label: H1
     name: h1
     widget: string
-  - label: Текст под заголовком
+  - label: Лид
     name: intro
     widget: text
-  - label: Обложка (при необходимости)
+  - label: Обложка
     name: cover_image
     widget: image
     required: false
@@ -549,52 +450,30 @@ collections:
     name: image_alt
     widget: string
     required: false
-  - label: Связанные услуги
-    name: related_services
-    widget: select
-    multiple: true
-    options:
-    - marketing-na-autsorse
-    - sozdanie-sajtov
-    - lidogeneraciya
-    - nastrojka-reklamy
-    - marketing-pod-klyuch
-    - crm-marketing
-    - seo
-    required: false
   - label: Редакционный статус
     name: editorial_status
     widget: select
     options:
-    - label: Черновик
-      value: draft
-    - label: Проверка
-      value: factcheck
-    - label: Согласовано
-      value: approved
+    - draft
+    - factcheck
+    - approved
     default: draft
-  - label: Редактор, согласовавший страницу
+  - label: Утвердил
     name: reviewed_by
     widget: string
     required: false
-  - label: Дата согласования
+  - label: Дата утверждения
     name: reviewed_on
-    widget: datetime
-    date_format: YYYY-MM-DD
-    time_format: false
-    format: YYYY-MM-DD
+    widget: string
     required: false
-  - label: Основания для фактов
+  - label: Основания
     name: source_notes
     widget: text
     required: false
-  - label: Готова к публикации
+  - label: Опубликовано
     name: published
     widget: boolean
     default: false
-  - label: Текст страницы
+  - label: Основной текст
     name: body
     widget: markdown
-local_backend: true
-site_url: https://expertteam.pro
-display_url: https://expertteam.pro

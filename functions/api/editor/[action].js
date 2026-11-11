@@ -271,6 +271,10 @@ export async function onRequest(context) {
     if (action === 'save') return await save(context, user);
   } catch (e) {
     const response = e?.status || 500;
+    // Server-side diagnostics: never print request bodies, cookies, credentials or tokens.
+    console.error('[ExpertTeam CMS V3]', 'action=' + action, 'status=' + response,
+      'error=' + String(e?.name || 'Error'), 'message=' + String(e?.message || 'Unknown error'),
+      'stack=' + String(e?.stack || 'not available'));
     const message = response === 500 ? 'Внутренняя ошибка редактора; проверьте журналы функций Cloudflare.' : String(e.message);
     return error(message, response);
   }

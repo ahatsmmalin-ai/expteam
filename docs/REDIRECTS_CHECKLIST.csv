@@ -1,3 +1,0 @@
-Старый URL;Новый URL;Статус;Примечание
-https://expertteam.pro/;https://expertteam.pro/;Не нужен редирект;Главная остаётся на месте
-https://expertteam.pro/<old-service-path>/;https://expertteam.pro/uslugi/<approved-slug>/;Требует краулинга;Не публиковать эту строку как правило до проверки действующего URL

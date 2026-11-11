@@ -37,6 +37,43 @@ def render_text(template, data, global_data):
   return html.escape(source[key],quote=True)
  return LINK_PATTERN.sub(sub,template)
 
+def render_visual_text(template, page, global_data):
+ """Render editor-only preview with stable identifiers for actual visible text fragments.
+ This is not the published HTML. No scripts are enabled in the sandboxed iframe.
+ """
+ from bs4 import BeautifulSoup, NavigableString
+ data={'meta_title':str(page.get('meta_title','')),
+       'meta_description':str(page.get('meta_description',''))}
+ data.update(nested_text(page))
+ soup=BeautifulSoup(template,'html.parser')
+ for node in list(soup.find_all(string=True)):
+  if node.parent and node.parent.name in ('script','style','noscript'):
+   continue
+  raw=str(node)
+  found=list(LINK_PATTERN.finditer(raw))
+  if not found: continue
+  bits=[];pos=0
+  for m in found:
+   if m.start()>pos:bits.append(NavigableString(raw[pos:m.start()]))
+   scope='global' if m.group(1) else 'page'
+   key=m.group(2)
+   source=global_data if scope=='global' else data
+   if key not in source:raise ValueError(f'Undefined visual editor token {scope}:{key}')
+   if key.startswith('meta_') or node.parent.name in ('title',):
+    bits.append(NavigableString(source[key]))
+   else:
+    marker=soup.new_tag('span')
+    marker['data-et-key']=key
+    marker['data-et-scope']=scope
+    marker['class']='et-visual-fragment'
+    marker.string=source[key]
+    bits.append(marker)
+   pos=m.end()
+  if pos<len(raw):bits.append(NavigableString(raw[pos:]))
+  node.replace_with(*bits)
+ # Attribute placeholders (meta description, aria-label etc) must be rendered too.
+ return LINK_PATTERN.sub(lambda m:html.escape((global_data if m.group(1) else data)[m.group(2)],quote=True),str(soup))
+
 def normalize_asset(path, output):
  if not path: return ''
  url=urlparse(path)
@@ -300,7 +337,7 @@ def write_new_pages():
 def main():
  if DIST.exists():shutil.rmtree(DIST)
  DIST.mkdir()
- for directory in ('assets','admin','downloads'):
+ for directory in ('assets','admin','downloads','edit'):
   src=ROOT/directory
   if src.exists():shutil.copytree(src,DIST/directory)
  for parent in ('uslugi','ceny','404'):
@@ -327,6 +364,40 @@ def main():
   outfile.write_text(rendered,'utf-8')
  n_posts=write_articles()
  n_pages=write_new_pages()
+ # Editor-only annotated copies. Real public HTML remains byte-for-byte unaffected by markers.
+ # An isolated sandboxed iframe loads these pages while editor controls run in /edit/.
+ preview_root=DIST/'edit-preview'
+ preview_index={}
+ for entry in MANIFEST:
+  rel=entry['template']
+  template=TEMPLATES/rel
+  page=load_json(CONTENT/'pages'/entry['json'])
+  preview_file=preview_root/rel
+  preview_file.parent.mkdir(parents=True,exist_ok=True)
+  preview=render_visual_text(template.read_text('utf-8'),page,globals)
+  preview=apply_media(preview,DIST/rel,media)
+  preview=apply_navigation(preview,DIST/rel,nav)
+  preview=apply_contact_links(preview,contacts)
+  preview=apply_seo_meta(preview,page)
+  from bs4 import BeautifulSoup
+  preview_soup=BeautifulSoup(preview,'html.parser')
+  head=preview_soup.head
+  if head:
+   base=preview_soup.new_tag('base')
+   route='/' if rel=='index.html' else '/'+rel[:-len('index.html')]
+   base['href']=route
+   head.insert(0,base)
+   extra_css=preview_soup.new_tag('link',rel='stylesheet',href='/edit/preview.css')
+   head.append(extra_css)
+  preview_file.write_text(str(preview_soup),'utf-8')
+  route='/' if rel=='index.html' else '/'+rel[:-len('index.html')]
+  preview_index[route]={'path':'content/pages/'+entry['json'],
+                        'preview':'/edit-preview/'+rel,
+                        'title':str(page.get('meta_title') or page.get('name') or route)}
+ (DIST/'edit'/'manifest.json').write_text(json.dumps({
+   'version':2,'repo':'ahatsmmalin-ai/expteam','pages':preview_index,
+   'global':'content/global.json'
+ },ensure_ascii=False,indent=2)+'\n','utf-8')
  (DIST/'_routes.json').write_text(json.dumps({'version':1,'include':['/api/*'],'exclude':[]},ensure_ascii=False)+'\n','utf-8')
  (DIST/'robots.txt').write_text('User-agent: *\nDisallow: /\n','utf-8')
  (DIST/'_headers').write_text('/*\n  X-Robots-Tag: noindex, nofollow, noarchive\n','utf-8')

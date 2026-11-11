@@ -1,0 +1,5 @@
+/* Visible only inside editor-only sandboxed copies. Public site CSS stays unchanged. */
+[data-et-key]{cursor:pointer;transition:outline-color .16s,background-color .16s;position:relative;border-radius:4px}
+[data-et-key]:hover,[data-et-key].et-edit-selected{outline:2px solid #0f09ff!important;outline-offset:3px;background:rgba(15,9,255,.09)}
+[data-et-key]:hover::after{content:"✎";font:700 11px/1 system-ui,Arial,sans-serif!important;letter-spacing:normal!important;position:absolute;z-index:1000;right:-10px;top:-14px;padding:5px 6px;color:#fff!important;background:#0f09ff;border-radius:6px;box-shadow:0 5px 12px rgba(6,1,115,.2);white-space:nowrap}
+[data-et-key].et-edit-selected::after{content:"✎";font:700 11px/1 system-ui,Arial,sans-serif!important;letter-spacing:normal!important;position:absolute;z-index:1000;right:-10px;top:-14px;padding:5px 6px;color:#fff!important;background:#0f09ff;border-radius:6px}

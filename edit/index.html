@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Редактирование на сайте — Expert Team</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/edit/editor.css">
+</head>
+<body>
+<div id="app">
+  <header class="toolbar">
+    <div class="brand"><span class="mark">E<span>.</span>T</span><div><b>EXPERT TEAM</b><small>Визуальный редактор</small></div></div>
+    <div class="toolbar-page"><span class="chip">CMS V2</span> <span id="pageTitle">Главная</span> <select id="pagePicker" aria-label="Перейти к странице"><option value="/">Главная</option></select></div>
+    <div class="toolbar-actions">
+      <span id="identity" class="identity">Вход не выполнен</span>
+      <a href="/admin/" class="link" target="_blank" rel="noopener">Обычная CMS ↗</a>
+      <button id="loginButton" class="primary" type="button">Войти через GitHub</button>
+      <button id="logoutButton" class="secondary hidden" type="button">Выйти</button>
+    </div>
+  </header>
+  <div class="workspace">
+    <div class="canvas">
+      <div class="info-bar"><span class="info-dot"></span><span id="infoText">Войдите через GitHub, чтобы редактировать текст прямо на страницах.</span><span id="currentUrl">/</span></div>
+      <iframe id="siteFrame" title="Предпросмотр сайта Expert Team" src="/edit-preview/index.html" sandbox="allow-same-origin"></iframe>
+    </div>
+    <aside class="inspector" aria-label="Редактор текста">
+      <div class="inspector-head"><span>РЕДАКТИРОВАНИЕ</span><span id="changeCount" class="count">0 изменений</span></div>
+      <div id="guestPanel" class="panel welcome">
+        <div class="symbol">✎</div>
+        <h1>Правки прямо на странице</h1>
+        <p>Откройте нужный раздел сайта. Наведите курсор на текст — рядом появится значок карандаша. Нажмите на фрагмент, чтобы изменить его в этой панели.</p>
+        <p>После проверки правки создаётся запрос на согласование в GitHub. Действующий сайт меняется только после утверждения.</p>
+        <button id="guestLoginButton" type="button" class="primary wide">Войти через GitHub</button>
+      </div>
+      <div id="editPanel" class="panel hidden">
+        <p id="editScope" class="edit-scope">Текст страницы</p>
+        <h2 id="editLabel">Выберите текст на сайте</h2>
+        <label for="editValue">Текст</label>
+        <textarea id="editValue" rows="6" spellcheck="true" placeholder="Нажмите на текст в предпросмотре"></textarea>
+        <div class="edit-tip">Изменения сразу видны в предпросмотре, но не публикуются автоматически. Дизайн и ссылки остаются прежними.</div>
+        <button id="resetField" type="button" class="secondary wide">Вернуть этот текст</button>
+      </div>
+      <div id="selectPanel" class="panel hidden">
+        <h2>Выберите блок на сайте</h2>
+        <p>Подсвеченные фрагменты можно нажать и сразу отредактировать. Для перехода по страницам используйте обычные ссылки на сайте.</p>
+        <p>Тексты меню и подвала общие для всех страниц; их изменения будут показаны отдельно.</p>
+      </div>
+      <div class="panel actions hidden" id="savePanel">
+        <div id="changeSummary" class="summary">Изменений нет</div>
+        <button id="saveButton" type="button" class="primary wide" disabled>Отправить на согласование</button>
+        <button id="discardButton" type="button" class="secondary wide" disabled>Отменить все изменения</button>
+        <p class="fine">Создаст отдельную ветку и pull request. Публикация произойдёт после объединения с main и успешной сборки Cloudflare.</p>
+      </div>
+      <div class="status hidden" id="result" role="status" aria-live="polite"></div>
+    </aside>
+  </div>
+</div>
+<script src="/edit/editor.js" defer></script>
+</body>
+</html>

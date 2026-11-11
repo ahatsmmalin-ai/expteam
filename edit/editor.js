@@ -1,4 +1,4 @@
-/* Expert Team CMS V3 — password login, private server API, direct save to main. */
+/* Expert Team CMS V3.1 — reliable text selection, page data sync, private server API. */
 (() => {
   'use strict';
   const ORIGIN = location.origin;
@@ -20,11 +20,13 @@
     if(withLink){const a=document.createElement('a');a.href=withLink;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Посмотреть историю изменений ↗';box.appendChild(document.createElement('br'));box.appendChild(a)}
     box.classList.toggle('error',isError);show('result',!!message);
   };
-  const arrPage = data => (data?.sections||[]).flatMap(section=>section.items||[]);
-  const arrGlobal = data => data?.entries||[];
+  const arrPage = data => Array.isArray(data?.sections)
+    ? data.sections.flatMap(section => Array.isArray(section.items) ? section.items : []) : [];
+  const arrGlobal = data => Array.isArray(data?.entries) ? data.entries : [];
+  const scopeItems = (scope, data) => scope==='global' ? arrGlobal(data) : arrPage(data);
   function getItem(scope,key,which='draft'){
     const data=app[which][scope];
-    return (scope==='global'?arrGlobal(data):arrPage(data)).find(x=>x.id===key)||null;
+    return scopeItems(scope,data).find(x=>String(x.id)===String(key))||null;
   }
   const allChanges = () => {
     const changes=[];
@@ -89,6 +91,9 @@
     const result=await request('/content?route='+encodeURIComponent(app.route));
     app.files.page=info.path;
     app.sha.page=result.page.sha; app.sha.global=result.global.sha;
+    if(!Array.isArray(result.page?.data?.sections) || !Array.isArray(result.global?.data?.entries)) {
+      throw new Error('Ответ содержит неправильную структуру текстов. Проверьте content/pages и content/global.json в GitHub.');
+    }
     app.original.page=result.page.data; app.original.global=result.global.data;
     app.draft.page=deepClone(result.page.data); app.draft.global=deepClone(result.global.data);
     app.selected=null;authUI();
@@ -96,19 +101,51 @@
   function updatePreview(scope,key,value){
     const d=frame.contentDocument;
     if(!d)return;
-    d.querySelectorAll(`[data-et-scope="${scope}"][data-et-key="${key}"]`).forEach(n=>{n.textContent=value});
+    // In the unlikely case that a preview came from an earlier build, keep
+    // its marker key separate from the current GitHub content ID.
+    const visibleKey=app.selected?.scope===scope && app.selected?.key===key
+      ? app.selected.previewKey : key;
+    d.querySelectorAll(`[data-et-scope="${scope}"][data-et-key="${visibleKey}"]`).forEach(n=>{n.textContent=value});
   }
-  function chooseItem(scope,key){
+  let selectionVersion=0;
+  async function chooseItem(scope,key,marker=null){
     if(!app.loggedIn){status('Сначала войдите по логину и паролю.');return}
-    const item=getItem(scope,key);
-    if(!item){status('Текст не найден в данных страницы. Перезагрузите редактор.',true);return}
-    app.selected={scope,key};
+    if(scope!=='page' && scope!=='global')return;
+    key=String(key||'');
+    const version=++selectionVersion;
+    let item=getItem(scope,key);
+    // This happens when the user clicks before Github content finishes loading,
+    // or when Cloudflare's HTML and Github main are momentarily out of sync.
+    if(!item && !app.busy && allChanges().length===0){
+      status('Синхронизирую тексты страницы…');
+      try {await loadGithubContent()} catch(e) {
+        status('Не удалось загрузить тексты страницы: '+e.message,true);return;
+      }
+      if(version!==selectionVersion || !app.loggedIn)return;
+      item=getItem(scope,key);
+    }
+    let resolvedKey=key;
+    if(!item && marker){
+      // Fallback only for a *unique exact* text match, never for approximate
+      // similarity. Otherwise there is a risk of changing the wrong field.
+      const text=String(marker.textContent||'').trim();
+      const matches=scopeItems(scope,app.draft[scope]).filter(x=>String(x.value??'').trim()===text);
+      if(text && matches.length===1){item=matches[0];resolvedKey=String(item.id)}
+    }
+    if(!item){
+      const pageCount=arrPage(app.draft.page).length;
+      const globalCount=arrGlobal(app.draft.global).length;
+      status(`Не удалось связать этот текст с CMS (страница ${app.route}, поле ${scope}:${key}; загружено ${pageCount} текстов страницы и ${globalCount} общих). Обновите редактор. Если ошибка останется — сообщите эти цифры.`,true);
+      return;
+    }
+    app.selected={scope,key:resolvedKey,previewKey:key};
     $('editLabel').textContent=caption(item.label||item.value,140)||'Текст';
     $('editScope').textContent=scope==='global'?'Общий текст — на всех страницах':'Текст этой страницы';
     $('editValue').value=String(item.value??'');
     frame.contentDocument?.querySelectorAll('.et-edit-selected').forEach(n=>n.classList.remove('et-edit-selected'));
     frame.contentDocument?.querySelectorAll(`[data-et-scope="${scope}"][data-et-key="${key}"]`).forEach(n=>n.classList.add('et-edit-selected'));
     authUI();
+    status('');
   }
   async function loadRoute(route,ignoreChanges=false){
     if(!app.manifest?.pages?.[route]){status('Эта страница пока не поддерживается визуальным редактором. Её можно открыть в обычной CMS.',true);return}
@@ -132,7 +169,7 @@
       const marker=evt.target.closest?.('[data-et-key]');
       if(marker){
         evt.preventDefault();evt.stopPropagation();
-        chooseItem(marker.dataset.etScope,marker.dataset.etKey);return;
+        chooseItem(marker.dataset.etScope,marker.dataset.etKey,marker);return;
       }
       const navToggle=evt.target.closest?.('.nav-trigger');
       if(navToggle){
@@ -213,7 +250,7 @@
       const selected=app.selected;
       try{
         await loadGithubContent();
-        if(selected&&getItem(selected.scope,selected.key))chooseItem(selected.scope,selected.key);
+        if(selected&&getItem(selected.scope,selected.key))await chooseItem(selected.scope,selected.previewKey,frame.contentDocument?.querySelector(`[data-et-scope="${selected.scope}"][data-et-key="${selected.previewKey}"]`));
       }catch(refreshError){
         app.original.page=deepClone(app.draft.page);
         app.original.global=deepClone(app.draft.global);

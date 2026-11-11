@@ -124,7 +124,7 @@ async function github(env, path, options = {}) {
       'User-Agent': 'ExpertTeam-Visual-CMS'
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
-    redirect: 'error'
+    redirect: 'manual'
   });
   let data;
   try { data = await response.json(); } catch (_) { data = {}; }

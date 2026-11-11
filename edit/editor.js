@@ -1,4 +1,4 @@
-/* Expert Team CMS V2 — isolated visual editor. No OAuth tokens are persisted. */
+/* Expert Team CMS V2.1 — direct save to main. No OAuth tokens are persisted. */
 (() => {
   'use strict';
   const ORIGIN = location.origin;
@@ -19,7 +19,7 @@
   const status = (message,isError=false,withLink=null) => {
     const box=$('result'); box.replaceChildren();
     box.appendChild(document.createTextNode(message));
-    if(withLink){const a=document.createElement('a');a.href=withLink;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Открыть запрос на согласование ↗';box.appendChild(document.createElement('br'));box.appendChild(a)}
+    if(withLink){const a=document.createElement('a');a.href=withLink;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Посмотреть коммит в GitHub ↗';box.appendChild(document.createElement('br'));box.appendChild(a)}
     box.classList.toggle('error',isError);show('result',!!message);
   };
   const arrPage = data => (data?.sections||[]).flatMap(section=>section.items||[]);
@@ -41,7 +41,7 @@
   function syncControls(){
     const count=allChanges().length;
     $('changeCount').textContent=count+' '+(count===1?'изменение':count>=2&&count<=4?'изменения':'изменений');
-    $('changeSummary').textContent=count?`Изменено фрагментов: ${count}. Действующий сайт не изменён.`:'Изменений нет';
+    $('changeSummary').textContent=count?`Изменено фрагментов: ${count}. Нажмите «Сохранить изменения», чтобы опубликовать.`:'Изменений нет';
     $('saveButton').disabled=count===0||app.busy;
     $('discardButton').disabled=count===0||app.busy;
   }
@@ -212,38 +212,69 @@
     frame.src=app.manifest.pages[app.route].preview;
   }
   async function save(){
-    const changes=allChanges();if(!changes.length||!app.token||app.busy)return;
-    app.busy=true;syncControls();status('Проверяю актуальность файлов на GitHub…');
-    let branch=null;
+    const changes=allChanges();
+    if(!changes.length||!app.token||app.busy)return;
+    app.busy=true;
+    syncControls();
+    status('Проверяю актуальность файлов и сохраняю изменения…');
     try{
       const scopes=[...new Set(changes.map(c=>c.scope))];
-      const latest={};
-      for(const scope of scopes){
-        latest[scope]=await getFile(app.files[scope]);
-        if(latest[scope].sha!==app.sha[scope]){
-          throw new Error('Файл '+app.files[scope]+' уже изменился в GitHub. Перезагрузите редактор и внесите правки на свежей версии.');
+      // Take the main branch tip; do not overwrite somebody else's new version.
+      const ref=await request('/git/ref/heads/main');
+      const headSha=ref.object?.sha;
+      if(!headSha)throw new Error('Не удалось прочитать актуальный коммит main');
+      const head=await request('/git/commits/'+encodeURIComponent(headSha));
+      if(!head.tree?.sha)throw new Error('Не удалось прочитать дерево файлов main');
+      const latest=await Promise.all(scopes.map(scope=>getFile(app.files[scope])));
+      const treeEntries=[];
+      for(let i=0;i<scopes.length;i++){
+        const scope=scopes[i];
+        if(latest[i].sha!==app.sha[scope]){
+          throw new Error('Файл «'+app.files[scope]+'» уже был изменён другим сотрудником. Перезагрузите редактор перед сохранением, чтобы не затереть его правки.');
         }
+        const text=JSON.stringify(app.draft[scope],null,2)+'\n';
+        treeEntries.push({path:app.files[scope],mode:'100644',type:'blob',content:text});
       }
-      const base=await request('/git/ref/heads/main');
-      branch='visual/et-'+new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14)+'-'+Math.random().toString(36).slice(2,8);
-      await request('/git/refs',{method:'POST',body:{ref:'refs/heads/'+branch,sha:base.object.sha}});
-      for(const scope of scopes){
-        const path=app.files[scope];
-        const file=deepClone(app.draft[scope]);
-        const content=encodeUtf8Base64(JSON.stringify(file,null,2)+'\n');
-        await request('/contents/'+path.split('/').map(encodeURIComponent).join('/'),{
-          method:'PUT',body:{message:'CMS visual: '+(scope==='page'?'правки страницы':'общие тексты'),content,sha:latest[scope].sha,branch}
-        });
+      // Atomic commit: save both the page and shared texts together if needed.
+      const tree=await request('/git/trees',{
+        method:'POST',body:{base_tree:head.tree.sha,tree:treeEntries}
+      });
+      const pageName=app.manifest.pages[app.route]?.title||app.route;
+      const commit=await request('/git/commits',{
+        method:'POST',body:{
+          message:'CMS visual: '+pageName+' ('+changes.length+' изменений)',
+          tree:tree.sha,parents:[headSha]
+        }
+      });
+      // force:false enforces a fast-forward update, and respects branch protection.
+      await request('/git/refs/heads/main',{
+        method:'PATCH',body:{sha:commit.sha,force:false}
+      });
+      const selected=app.selected;
+      try{
+        await loadGithubContent();
+        if(selected&&getItem(selected.scope,selected.key)){
+          chooseItem(selected.scope,selected.key);
+        }
+      }catch(refreshError){
+        // GitHub already confirmed the commit; do not misreport a successful save
+        // as a failed write if the immediate readback encounters a temporary issue.
+        app.original.page=deepClone(app.draft.page);
+        app.original.global=deepClone(app.draft.global);
+        status('Изменения сохранены в GitHub, но автоматическое обновление данных редактора пока недоступно. Перед следующей правкой обновите страницу.',false,`https://github.com/${REPO}/commit/${commit.sha}`);
+        return;
       }
-      const title='CMS: визуальные правки — '+(app.manifest.pages[app.route].title||app.route).slice(0,65);
-      const summary=changes.map(c=>`- ${c.scope==='global'?'Общий текст':'Страница'}: ${caption(c.label,85)}`).join('\n');
-      const pr=await request('/pulls',{method:'POST',body:{title,head:branch,base:'main',body:'Правки из визуального редактора Expert Team.\n\n'+summary+'\n\nПроверьте изменения и объедините PR для публикации в Cloudflare Pages.'}});
-      status('Изменения сохранены в отдельной ветке. Запрос на согласование создан. После проверки и объединения PR сайт обновится.',false,pr.html_url);
-      app.original.page=deepClone(app.draft.page);app.original.global=deepClone(app.draft.global);
-      syncControls();
+      status('Изменения сохранены в GitHub! Cloudflare автоматически обновит сайт после успешной сборки. Ничего согласовывать или объединять вручную не нужно.',false,`https://github.com/${REPO}/commit/${commit.sha}`);
     }catch(e){
-      status('Не удалось отправить изменения: '+e.message+(branch?' Ветка: '+branch:''),true);
-    }finally{app.busy=false;syncControls()}
+      let msg=String(e.message||e);
+      if(/HTTP 403|HTTP 422/.test(msg)){
+        msg+=' Проверьте, разрешены ли прямые коммиты в ветку main и не появились ли параллельные правки. Если правила ветки требуют pull request, прямое сохранение будет недоступно.';
+      }
+      status('Не удалось сохранить изменения: '+msg,true);
+    }finally{
+      app.busy=false;
+      syncControls();
+    }
   }
   $('loginButton').addEventListener('click',login);
   $('guestLoginButton').addEventListener('click',login);

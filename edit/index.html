@@ -7,22 +7,28 @@
 <title>Редактирование на сайте — Expert Team</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/edit/editor.css">
+<style>
+#loginForm{margin-top:20px;display:flex;flex-direction:column;gap:8px}
+#loginForm label{margin-top:5px}
+#loginForm input{display:block;width:100%;border:1px solid #cfd6e6;border-radius:10px;padding:12px 14px;font:inherit;background:white;color:#111426;min-height:44px}
+#loginForm input:focus-visible{outline:3px solid #9997ff;outline-offset:2px}
+#loginForm button{margin-top:12px}
+</style>
 </head>
 <body>
 <div id="app">
   <header class="toolbar">
     <div class="brand"><span class="mark">E<span>.</span>T</span><div><b>EXPERT TEAM</b><small>Визуальный редактор</small></div></div>
-    <div class="toolbar-page"><span class="chip">CMS V2.1</span> <span id="pageTitle">Главная</span> <select id="pagePicker" aria-label="Перейти к странице"><option value="/">Главная</option></select></div>
+    <div class="toolbar-page"><span class="chip">CMS V3</span> <span id="pageTitle">Главная</span> <select id="pagePicker" aria-label="Перейти к странице"><option value="/">Главная</option></select></div>
     <div class="toolbar-actions">
       <span id="identity" class="identity">Вход не выполнен</span>
-      <a href="/admin/" class="link" target="_blank" rel="noopener">Обычная CMS ↗</a>
-      <button id="loginButton" class="primary" type="button">Войти через GitHub</button>
+      <button id="loginButton" class="primary" type="button">Войти</button>
       <button id="logoutButton" class="secondary hidden" type="button">Выйти</button>
     </div>
   </header>
   <div class="workspace">
     <div class="canvas">
-      <div class="info-bar"><span class="info-dot"></span><span id="infoText">Войдите через GitHub, чтобы редактировать текст прямо на страницах.</span><span id="currentUrl">/</span></div>
+      <div class="info-bar"><span class="info-dot"></span><span id="infoText">Войдите по логину и паролю, чтобы редактировать тексты прямо на страницах.</span><span id="currentUrl">/</span></div>
       <iframe id="siteFrame" title="Предпросмотр сайта Expert Team" src="/edit-preview/index.html" sandbox="allow-same-origin"></iframe>
     </div>
     <aside class="inspector" aria-label="Редактор текста">
@@ -31,15 +37,21 @@
         <div class="symbol">✎</div>
         <h1>Правки прямо на странице</h1>
         <p>Откройте нужный раздел сайта. Наведите курсор на текст — рядом появится значок карандаша. Нажмите на фрагмент, чтобы изменить его в этой панели.</p>
-        <p>Нажмите «Сохранить изменения» — текст будет записан прямо в GitHub. После автоматической сборки Cloudflare сайт обновится без отдельного согласования.</p>
-        <button id="guestLoginButton" type="button" class="primary wide">Войти через GitHub</button>
+        <p>Нажмите «Сохранить изменения» — текст будет автоматически опубликован после сборки Cloudflare. Аккаунт GitHub сотруднику не требуется.</p>
+        <form id="loginForm" autocomplete="on">
+          <label for="loginUsername">Логин</label>
+          <input id="loginUsername" name="username" type="text" autocomplete="username" placeholder="Логин сотрудника" required maxlength="100">
+          <label for="loginPassword">Пароль</label>
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Пароль" required maxlength="256">
+          <button id="guestLoginButton" type="submit" class="primary wide">Войти в редактор</button>
+        </form>
       </div>
       <div id="editPanel" class="panel hidden">
         <p id="editScope" class="edit-scope">Текст страницы</p>
         <h2 id="editLabel">Выберите текст на сайте</h2>
         <label for="editValue">Текст</label>
         <textarea id="editValue" rows="6" spellcheck="true" placeholder="Нажмите на текст в предпросмотре"></textarea>
-        <div class="edit-tip">Изменения сразу видны в предпросмотре. После сохранения они попадут в GitHub и будут опубликованы после успешной автоматической сборки Cloudflare. Дизайн и ссылки остаются прежними.</div>
+        <div class="edit-tip">Изменения сразу видны в предпросмотре. После сохранения они будут опубликованы после успешной автоматической сборки сайта. Дизайн и ссылки остаются прежними.</div>
         <button id="resetField" type="button" class="secondary wide">Вернуть этот текст</button>
       </div>
       <div id="selectPanel" class="panel hidden">
@@ -51,7 +63,7 @@
         <div id="changeSummary" class="summary">Изменений нет</div>
         <button id="saveButton" type="button" class="primary wide" disabled>Сохранить изменения</button>
         <button id="discardButton" type="button" class="secondary wide" disabled>Отменить все изменения</button>
-        <p class="fine">Сохраняет изменения непосредственно в ветку main. Cloudflare автоматически пересоберёт сайт. GitHub хранит историю изменений для отката.</p>
+        <p class="fine">Сохраняет изменения без согласований. Cloudflare обновит сайт после сборки. История изменений сохраняется для восстановления.</p>
       </div>
       <div class="status hidden" id="result" role="status" aria-live="polite"></div>
     </aside>

@@ -1,14 +1,12 @@
-/* Expert Team CMS V2.1 — direct save to main. No OAuth tokens are persisted. */
+/* Expert Team CMS V3 — password login, private server API, direct save to main. */
 (() => {
   'use strict';
   const ORIGIN = location.origin;
-  const CANONICAL = 'https://expteam-staging.pages.dev';
-  const REPO = 'ahatsmmalin-ai/expteam';
-  const API = `https://api.github.com/repos/${REPO}`;
+  const API = '/api/editor';
   const $ = id => document.getElementById(id);
   const frame = $('siteFrame');
   const app = {
-    manifest: null, token: null, popup: null, username: '', route: '/',
+    manifest: null, loggedIn: false, username: '', route: '/',
     original: {page:null, global:null}, draft:{page:null,global:null},
     files: {page:null, global:'content/global.json'}, sha:{page:null,global:null},
     selected:null, busy:false
@@ -19,7 +17,7 @@
   const status = (message,isError=false,withLink=null) => {
     const box=$('result'); box.replaceChildren();
     box.appendChild(document.createTextNode(message));
-    if(withLink){const a=document.createElement('a');a.href=withLink;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Посмотреть коммит в GitHub ↗';box.appendChild(document.createElement('br'));box.appendChild(a)}
+    if(withLink){const a=document.createElement('a');a.href=withLink;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Посмотреть историю изменений ↗';box.appendChild(document.createElement('br'));box.appendChild(a)}
     box.classList.toggle('error',isError);show('result',!!message);
   };
   const arrPage = data => (data?.sections||[]).flatMap(section=>section.items||[]);
@@ -46,12 +44,12 @@
     $('discardButton').disabled=count===0||app.busy;
   }
   function authUI(){
-    const logged=!!app.token;
+    const logged=app.loggedIn;
     show('loginButton',!logged);show('logoutButton',logged);
     show('guestPanel',!logged);show('savePanel',logged);
     show('selectPanel',logged&&!app.selected);show('editPanel',logged&&!!app.selected);
-    $('identity').textContent=logged?`GitHub: ${app.username}`:'Вход не выполнен';
-    $('infoText').textContent=logged?'Наведите курсор на текст и нажмите ✎, чтобы изменить его.':'Войдите через GitHub, чтобы править тексты на сайте.';
+    $('identity').textContent=logged?`Редактор: ${app.username}`:'Вход не выполнен';
+    $('infoText').textContent=logged?'Наведите курсор на текст и нажмите ✎, чтобы изменить его.':'Войдите по логину и паролю, чтобы править тексты на сайте.';
     syncControls();
   }
   function pageRoute(url){
@@ -62,42 +60,37 @@
     return app.manifest?.pages?.[path]?path:null;
   }
   const request = async (path,options={}) => {
-    const res=await fetch((path.startsWith('http')?path:API+path),{
-      method:options.method||'GET',
-      headers:{'Accept':'application/vnd.github+json','Authorization':'Bearer '+app.token,
-        'X-GitHub-Api-Version':'2022-11-28', ...(options.body?{'Content-Type':'application/json'}:{})},
-      body:options.body?JSON.stringify(options.body):undefined,credentials:'omit',cache:'no-store'
+    const res = await fetch(API + path, {
+      method: options.method || 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: {
+        'Accept':'application/json',
+        ...(options.body ? {'Content-Type':'application/json', 'X-ET-Editor':'v3'} : {})
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined
     });
     let response;
-    try{response=await res.json()}catch(_){response={}}
-    if(!res.ok){throw new Error((response?.message||'Ошибка GitHub')+` (HTTP ${res.status})`)}
+    try {response = await res.json()} catch(_) {response = {}}
+    if (!res.ok) {
+      if (res.status === 401 && path !== '/login') {
+        app.loggedIn = false;
+        app.username = '';
+        authUI();
+      }
+      throw new Error(response?.error || `Ошибка сервера (HTTP ${res.status})`);
+    }
     return response;
   };
-  function decodeBase64Utf8(text){
-    const binary=atob(text.replace(/\s/g,''));
-    const bytes=Uint8Array.from(binary, ch=>ch.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  }
-  function encodeUtf8Base64(text){
-    const bytes=new TextEncoder().encode(text);
-    let bin='';const chunk=8192;
-    for(let i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode(...bytes.subarray(i,i+chunk));
-    return btoa(bin);
-  }
-  async function getFile(path,ref='main'){
-    const item=await request('/contents/'+path.split('/').map(encodeURIComponent).join('/')+'?ref='+encodeURIComponent(ref));
-    if(item.type!=='file'||typeof item.content!=='string')throw new Error('Не удалось прочитать '+path);
-    return {data:JSON.parse(decodeBase64Utf8(item.content)),sha:item.sha};
-  }
   async function loadGithubContent(){
-    if(!app.token)return;
+    if(!app.loggedIn)return;
     const info=app.manifest.pages[app.route];
     if(!info)throw new Error('Неизвестный маршрут страницы');
-    const [page,global]=await Promise.all([getFile(info.path),getFile(app.files.global)]);
+    const result=await request('/content?route='+encodeURIComponent(app.route));
     app.files.page=info.path;
-    app.sha.page=page.sha;app.sha.global=global.sha;
-    app.original.page=page.data;app.original.global=global.data;
-    app.draft.page=deepClone(page.data);app.draft.global=deepClone(global.data);
+    app.sha.page=result.page.sha; app.sha.global=result.global.sha;
+    app.original.page=result.page.data; app.original.global=result.global.data;
+    app.draft.page=deepClone(result.page.data); app.draft.global=deepClone(result.global.data);
     app.selected=null;authUI();
   }
   function updatePreview(scope,key,value){
@@ -106,7 +99,7 @@
     d.querySelectorAll(`[data-et-scope="${scope}"][data-et-key="${key}"]`).forEach(n=>{n.textContent=value});
   }
   function chooseItem(scope,key){
-    if(!app.token){status('Сначала войдите через GitHub.');return}
+    if(!app.loggedIn){status('Сначала войдите по логину и паролю.');return}
     const item=getItem(scope,key);
     if(!item){status('Текст не найден в данных страницы. Перезагрузите редактор.',true);return}
     app.selected={scope,key};
@@ -127,8 +120,8 @@
     $('pagePicker').value=route;
     status('');
     frame.src=entry.preview;
-    if(app.token){
-      try{await loadGithubContent()}catch(e){status('Не удалось загрузить контент из GitHub: '+e.message,true)}
+    if(app.loggedIn){
+      try{await loadGithubContent()}catch(e){status('Не удалось загрузить тексты страницы: '+e.message,true)}
     }
     authUI();
   }
@@ -178,106 +171,61 @@
     }
   }
   async function login(){
-    if(ORIGIN!==CANONICAL){status('Вход в редактор разрешён только на '+CANONICAL+'/edit/',true);return}
-    if(app.popup&&!app.popup.closed){app.popup.focus();return}
-    status('Авторизация через GitHub…');
-    app.popup=window.open('/api/auth?provider=github&site_id=expteam-staging.pages.dev&scope=repo',
-      'expertteam_visual_oauth','width=630,height=720,resizable=yes,scrollbars=yes');
-    if(!app.popup)status('Браузер заблокировал окно входа. Разрешите всплывающие окна для сайта.',true);
+    const username=$('loginUsername').value.trim();
+    const password=$('loginPassword').value;
+    if (!username || !password) {status('Введите логин и пароль.',true);return}
+    $('guestLoginButton').disabled=true;
+    status('Проверяю логин и пароль…');
+    try{
+      const result=await request('/login',{method:'POST',body:{username,password}});
+      app.loggedIn=true; app.username=result.username;
+      $('loginPassword').value='';
+      await loadGithubContent();
+      authUI();status('Вход выполнен. Выберите текст на странице и измените его.');
+    }catch(e){
+      app.loggedIn=false;app.username='';authUI();
+      status('Не удалось войти: '+e.message,true);
+    }finally{$('guestLoginButton').disabled=false}
   }
-  window.addEventListener('message',async ev=>{
-    if(ev.origin!==ORIGIN||!app.popup||ev.source!==app.popup||typeof ev.data!=='string')return;
-    if(ev.data==='authorizing:github'){
-      app.popup.postMessage('authorizing:github',ORIGIN);return;
-    }
-    if(ev.data.startsWith('authorization:github:success:')){
-      try{
-        const data=JSON.parse(ev.data.slice('authorization:github:success:'.length));
-        if(typeof data.token!=='string'||!data.token)throw new Error('Токен не получен');
-        app.token=data.token;data.token=null;
-        const [user,repo]=await Promise.all([request('https://api.github.com/user'),request('')]);
-        if(!repo.permissions?.push){app.token=null;throw new Error('У аккаунта нет права записи в репозиторий '+REPO)}
-        app.username=user.login;
-        await loadGithubContent();
-        authUI();status('Вход выполнен. Наведите курсор на нужный текст и нажмите на него.');
-      }catch(e){app.token=null;app.username='';authUI();status('Не удалось войти: '+e.message,true)}
-    }
-    if(ev.data.startsWith('authorization:github:error:'))status('Авторизация не удалась. Попробуйте войти ещё раз.',true);
-  });
-  function logout(){
+  async function logout(){
     if(allChanges().length&&!confirm('Выйти и отменить несохранённые изменения?'))return;
-    app.token=null;app.username='';app.original.page=null;app.original.global=null;
+    try {await request('/logout',{method:'POST',body:{}})} catch(_) {}
+    app.loggedIn=false;app.username='';app.original.page=null;app.original.global=null;
     app.draft.page=null;app.draft.global=null;app.selected=null;
-    authUI();status('Сеанс редактора завершён.');
+    authUI();status('Вы вышли из редактора.');
     frame.src=app.manifest.pages[app.route].preview;
   }
   async function save(){
     const changes=allChanges();
-    if(!changes.length||!app.token||app.busy)return;
+    if(!changes.length||!app.loggedIn||app.busy)return;
     app.busy=true;
     syncControls();
-    status('Проверяю актуальность файлов и сохраняю изменения…');
+    status('Сохраняю изменения…');
     try{
-      const scopes=[...new Set(changes.map(c=>c.scope))];
-      // Take the main branch tip; do not overwrite somebody else's new version.
-      const ref=await request('/git/ref/heads/main');
-      const headSha=ref.object?.sha;
-      if(!headSha)throw new Error('Не удалось прочитать актуальный коммит main');
-      const head=await request('/git/commits/'+encodeURIComponent(headSha));
-      if(!head.tree?.sha)throw new Error('Не удалось прочитать дерево файлов main');
-      const latest=await Promise.all(scopes.map(scope=>getFile(app.files[scope])));
-      const treeEntries=[];
-      for(let i=0;i<scopes.length;i++){
-        const scope=scopes[i];
-        if(latest[i].sha!==app.sha[scope]){
-          throw new Error('Файл «'+app.files[scope]+'» уже был изменён другим сотрудником. Перезагрузите редактор перед сохранением, чтобы не затереть его правки.');
+      const result=await request('/save',{
+        method:'POST',
+        body:{
+          route:app.route,
+          sha:app.sha,
+          changes:changes.map(c=>({scope:c.scope,id:c.id,value:String(c.new)}))
         }
-        const text=JSON.stringify(app.draft[scope],null,2)+'\n';
-        treeEntries.push({path:app.files[scope],mode:'100644',type:'blob',content:text});
-      }
-      // Atomic commit: save both the page and shared texts together if needed.
-      const tree=await request('/git/trees',{
-        method:'POST',body:{base_tree:head.tree.sha,tree:treeEntries}
-      });
-      const pageName=app.manifest.pages[app.route]?.title||app.route;
-      const commit=await request('/git/commits',{
-        method:'POST',body:{
-          message:'CMS visual: '+pageName+' ('+changes.length+' изменений)',
-          tree:tree.sha,parents:[headSha]
-        }
-      });
-      // force:false enforces a fast-forward update, and respects branch protection.
-      await request('/git/refs/heads/main',{
-        method:'PATCH',body:{sha:commit.sha,force:false}
       });
       const selected=app.selected;
       try{
         await loadGithubContent();
-        if(selected&&getItem(selected.scope,selected.key)){
-          chooseItem(selected.scope,selected.key);
-        }
+        if(selected&&getItem(selected.scope,selected.key))chooseItem(selected.scope,selected.key);
       }catch(refreshError){
-        // GitHub already confirmed the commit; do not misreport a successful save
-        // as a failed write if the immediate readback encounters a temporary issue.
         app.original.page=deepClone(app.draft.page);
         app.original.global=deepClone(app.draft.global);
-        status('Изменения сохранены в GitHub, но автоматическое обновление данных редактора пока недоступно. Перед следующей правкой обновите страницу.',false,`https://github.com/${REPO}/commit/${commit.sha}`);
+        status('Изменения сохранены. Обновите редактор перед следующей правкой.',false,result.commitUrl);
         return;
       }
-      status('Изменения сохранены в GitHub! Cloudflare автоматически обновит сайт после успешной сборки. Ничего согласовывать или объединять вручную не нужно.',false,`https://github.com/${REPO}/commit/${commit.sha}`);
-    }catch(e){
-      let msg=String(e.message||e);
-      if(/HTTP 403|HTTP 422/.test(msg)){
-        msg+=' Проверьте, разрешены ли прямые коммиты в ветку main и не появились ли параллельные правки. Если правила ветки требуют pull request, прямое сохранение будет недоступно.';
-      }
-      status('Не удалось сохранить изменения: '+msg,true);
-    }finally{
-      app.busy=false;
-      syncControls();
-    }
+      status('Изменения сохранены! Cloudflare автоматически обновит сайт после сборки.',false,result.commitUrl);
+    }catch(e){status('Не удалось сохранить изменения: '+e.message,true)}
+    finally{app.busy=false;syncControls()}
   }
-  $('loginButton').addEventListener('click',login);
-  $('guestLoginButton').addEventListener('click',login);
+  $('loginButton').addEventListener('click',()=>{$('loginUsername').focus();$('guestPanel').scrollIntoView({block:'nearest',behavior:'smooth'})});
+  $('loginForm').addEventListener('submit',ev=>{ev.preventDefault();login()});
   $('logoutButton').addEventListener('click',logout);
   $('siteFrame').addEventListener('load',bindFrame);
   $('editValue').addEventListener('input',ev=>{
@@ -316,6 +264,13 @@
       const names=Object.keys(app.manifest.pages).sort((a,b)=>a==='/'?-1:b==='/'?1:a.localeCompare(b,'ru'));
       for(const route of names){const opt=document.createElement('option');opt.value=route;opt.textContent=(route==='/'?'Главная':route.replace(/^\//,'').replace(/\/$/,'').replace(/-/g,' '));picker.appendChild(opt)}
       const initial=new URLSearchParams(location.search).get('page');
+      try{
+        const session=await request('/session');
+        app.loggedIn=true;app.username=session.username;
+      }catch(e){
+        app.loggedIn=false;app.username='';
+        if(!e.message.includes('Необходимо войти'))status(e.message,true);
+      }
       await loadRoute(initial&&app.manifest.pages[initial]?initial:'/');
     }catch(e){status('Не удалось загрузить редактор: '+e.message,true)}
   })();

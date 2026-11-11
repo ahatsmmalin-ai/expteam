@@ -1,0 +1,82 @@
+{
+  "logo": "",
+  "team": [
+    {
+      "role": "Маркетолог",
+      "name": "",
+      "photo": ""
+    },
+    {
+      "role": "Руководитель проектов",
+      "name": "",
+      "photo": ""
+    },
+    {
+      "role": "Руководитель агентства",
+      "name": "",
+      "photo": ""
+    }
+  ],
+  "letters": [
+    {
+      "company": "Europack",
+      "scan": "",
+      "alt": "",
+      "approved": false
+    },
+    {
+      "company": "МФЦ «Моя Ипотека»",
+      "scan": "",
+      "alt": "",
+      "approved": false
+    },
+    {
+      "company": "Onlinetours / HomeOffice",
+      "scan": "",
+      "alt": "",
+      "approved": false
+    },
+    {
+      "company": "Cinemarental",
+      "scan": "",
+      "alt": "",
+      "approved": false
+    },
+    {
+      "company": "«Гурман»",
+      "scan": "",
+      "alt": "",
+      "approved": false
+    },
+    {
+      "company": "«Раздолье-Консалт»",
+      "scan": "",
+      "alt": "",
+      "approved": false
+    }
+  ],
+  "case_images": {
+    "gorodskoj-evakuator": "",
+    "astra": "",
+    "kredit-partner": "",
+    "mfc-moya-ipoteka": "",
+    "plexpoint": "",
+    "europack": "",
+    "razdolye-konsalt": "",
+    "homeoffice": "",
+    "cinemarental": ""
+  },
+  "case_screenshots": {
+    "gorodskoj-evakuator": [],
+    "astra": [],
+    "kredit-partner": [],
+    "mfc-moya-ipoteka": [],
+    "plexpoint": [],
+    "europack": [],
+    "razdolye-konsalt": [],
+    "homeoffice": [],
+    "cinemarental": []
+  },
+  "plan_preview": "",
+  "report_preview": ""
+}

@@ -830,3 +830,19 @@ h1,h2,h3,h4,.hero h1,.inner-hero h1,.et-five-heading h3{
   margin: 0;
   transform: translateY(1px);
 }
+
+/* CMS uploaded assets use the existing brand design. */
+.wordmark .et-cms-logo{display:block;width:auto;max-width:190px;max-height:62px;object-fit:contain}
+.team-card .et-cms-team-photo{width:132px;height:132px;object-fit:cover;border-radius:22px;filter:none!important}
+.team-card .et-cms-team-role{font-size:14px;margin:0 0 10px;color:inherit}
+.letters-grid .et-cms-real-letter{padding:14px;background:#fff}
+.et-cms-real-letter>a{display:flex;flex-direction:column;gap:10px;width:100%;height:100%;color:inherit}
+.et-cms-real-letter img{display:block;width:100%;height:205px;object-fit:contain;background:#F6F7FC;border-radius:12px}
+.et-cms-real-letter a>span{font-size:15px;font-weight:700}
+.case-card-image .et-cms-case-cover{width:100%;height:100%;object-fit:cover}
+.et-cms-added-article .article-layout{display:block}
+@media(max-width:770px){.et-cms-real-letter img{height:185px}}
+.et-cms-case-screenshot{display:block;width:100%;margin:20px 0}
+.et-cms-case-screenshot img{width:100%;height:auto;border:1px solid #E1E6F4;border-radius:18px}
+.et-cms-plan-preview{display:block;width:100%;height:100%;max-height:490px;object-fit:contain;border-radius:16px;box-shadow:0 15px 45px #08055b33}
+.et-cms-report-preview{display:block;width:100%;height:auto;border-radius:14px}

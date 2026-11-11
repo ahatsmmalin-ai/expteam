@@ -1,0 +1,154 @@
+[
+  {
+    "template": "blog/chto-takoe-crm-marketing/index.html",
+    "json": "blog__chto-takoe-crm-marketing.json"
+  },
+  {
+    "template": "blog/chto-takoe-lidogeneraciya/index.html",
+    "json": "blog__chto-takoe-lidogeneraciya.json"
+  },
+  {
+    "template": "blog/crm/index.html",
+    "json": "blog__crm.json"
+  },
+  {
+    "template": "blog/dmp-perehvat-klientov-konkurentov/index.html",
+    "json": "blog__dmp-perehvat-klientov-konkurentov.json"
+  },
+  {
+    "template": "blog/index.html",
+    "json": "blog.json"
+  },
+  {
+    "template": "blog/kak-vybrat-marketingovoe-agentstvo/index.html",
+    "json": "blog__kak-vybrat-marketingovoe-agentstvo.json"
+  },
+  {
+    "template": "blog/lending-ili-sajt-dlya-b2b/index.html",
+    "json": "blog__lending-ili-sajt-dlya-b2b.json"
+  },
+  {
+    "template": "blog/lidogeneraciya/index.html",
+    "json": "blog__lidogeneraciya.json"
+  },
+  {
+    "template": "blog/marketing/index.html",
+    "json": "blog__marketing.json"
+  },
+  {
+    "template": "blog/marketolog-v-shtat-ili-autsors/index.html",
+    "json": "blog__marketolog-v-shtat-ili-autsors.json"
+  },
+  {
+    "template": "blog/pochemu-reklama-ne-rabotaet/index.html",
+    "json": "blog__pochemu-reklama-ne-rabotaet.json"
+  },
+  {
+    "template": "blog/reklama/index.html",
+    "json": "blog__reklama.json"
+  },
+  {
+    "template": "blog/sajty/index.html",
+    "json": "blog__sajty.json"
+  },
+  {
+    "template": "blog/seo/index.html",
+    "json": "blog__seo.json"
+  },
+  {
+    "template": "blog/shablon-marketingovogo-otcheta/index.html",
+    "json": "blog__shablon-marketingovogo-otcheta.json"
+  },
+  {
+    "template": "blog/skolko-stoit-marketolog-v-shtate/index.html",
+    "json": "blog__skolko-stoit-marketolog-v-shtate.json"
+  },
+  {
+    "template": "blog/yandex-direkt-ili-vk-dlya-b2b/index.html",
+    "json": "blog__yandex-direkt-ili-vk-dlya-b2b.json"
+  },
+  {
+    "template": "index.html",
+    "json": "home.json"
+  },
+  {
+    "template": "kalkulyator-marketologa/index.html",
+    "json": "kalkulyator-marketologa.json"
+  },
+  {
+    "template": "kejsy/astra/index.html",
+    "json": "kejsy__astra.json"
+  },
+  {
+    "template": "kejsy/cinemarental/index.html",
+    "json": "kejsy__cinemarental.json"
+  },
+  {
+    "template": "kejsy/europack/index.html",
+    "json": "kejsy__europack.json"
+  },
+  {
+    "template": "kejsy/gorodskoj-evakuator/index.html",
+    "json": "kejsy__gorodskoj-evakuator.json"
+  },
+  {
+    "template": "kejsy/homeoffice/index.html",
+    "json": "kejsy__homeoffice.json"
+  },
+  {
+    "template": "kejsy/index.html",
+    "json": "kejsy.json"
+  },
+  {
+    "template": "kejsy/kredit-partner/index.html",
+    "json": "kejsy__kredit-partner.json"
+  },
+  {
+    "template": "kejsy/mfc-moya-ipoteka/index.html",
+    "json": "kejsy__mfc-moya-ipoteka.json"
+  },
+  {
+    "template": "kejsy/plexpoint/index.html",
+    "json": "kejsy__plexpoint.json"
+  },
+  {
+    "template": "kejsy/razdolye-konsalt/index.html",
+    "json": "kejsy__razdolye-konsalt.json"
+  },
+  {
+    "template": "kontakty/index.html",
+    "json": "kontakty.json"
+  },
+  {
+    "template": "marketingovyj-plan/index.html",
+    "json": "marketingovyj-plan.json"
+  },
+  {
+    "template": "materialy/marketolog-ili-komanda/index.html",
+    "json": "materialy__marketolog-ili-komanda.json"
+  },
+  {
+    "template": "o-kompanii/index.html",
+    "json": "o-kompanii.json"
+  },
+  {
+    "template": "politika-konfidencialnosti/index.html",
+    "json": "politika-konfidencialnosti.json"
+  },
+  {
+    "template": "resheniya/kompleksnyj-marketing/index.html",
+    "json": "resheniya__kompleksnyj-marketing.json"
+  },
+  {
+    "template": "resheniya/leadstore-koll-centr/index.html",
+    "json": "resheniya__leadstore-koll-centr.json"
+  },
+  {
+    "template": "resheniya/reaktivaciya-bazy/index.html",
+    "json": "resheniya__reaktivaciya-bazy.json"
+  },
+  {
+    "template": "stranicy/primer-cms/index.html",
+    "json": "stranicy__primer-cms.json"
+  }
+]

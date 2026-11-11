@@ -1,1 +1,3 @@
-# No Python packages needed to publish the ready static Expert Team V8 website.
+beautifulsoup4>=4.12,<5
+mistune>=3.0,<4
+PyYAML>=6.0,<7

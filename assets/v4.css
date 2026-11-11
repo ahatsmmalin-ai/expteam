@@ -770,3 +770,63 @@ h1,h2,h3,h4,.hero h1,.inner-hero h1,.et-five-heading h3{
   .report-section .report-demo{padding:35px 22px;gap:24px}
   .report-section .report-demo h2{max-width:none}
 }
+
+
+/* V8 / fix 1: keep primary blue service card solid on hover and keyboard focus */
+.scope-grid > .scope-card:first-child:is(:hover, :focus-within) {
+  background: #0F09FF !important;
+  border-color: #0F09FF;
+  box-shadow: 0 28px 62px rgba(15, 9, 255, .29);
+}
+.scope-grid > .scope-card:first-child:is(:hover, :focus-within) h3,
+.scope-grid > .scope-card:first-child:is(:hover, :focus-within) p,
+.scope-grid > .scope-card:first-child:is(:hover, :focus-within) > div:last-child > span {
+  color: #FFFFFF !important;
+}
+.scope-grid > .scope-card:first-child:is(:hover, :focus-within) .scope-icon {
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .36);
+}
+.scope-grid > .scope-card:first-child:is(:hover, :focus-within) .scope-icon img {
+  filter: brightness(0) invert(1);
+}
+
+/* V8 / fix 2: align nav links and the dropdown trigger to the same centerline */
+.top-nav { align-items: center; }
+.top-nav > a,
+.top-nav .nav-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  line-height: 1.35;
+  font-family: var(--v4-font);
+  font-size: 14px;
+  font-weight: 660;
+  letter-spacing: -.015em;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.top-nav .nav-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+  align-self: center;
+}
+.top-nav .nav-trigger {
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--ink);
+}
+.top-nav .nav-trigger > span {
+  display: inline-block;
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 1;
+  margin: 0;
+  transform: translateY(1px);
+}
